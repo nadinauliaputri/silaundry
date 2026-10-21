@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    background-color: #F5F7FA;
+    color: #1E293B;
+    overflow-x: hidden;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+  html.dark body {
+    background-color: #0B131E;
+    color: #F1F5F9;
+  }
+}
+
+/* Global Dark Mode Overrides for Full Consistency */
+html.dark .bg-white {
+  background-color: #132235;
+}
+html.dark .bg-slate-50 {
+  background-color: #0E1A29;
+}
+html.dark .bg-slate-100 {
+  background-color: #1A2E44;
+}
+html.dark .text-\[\#101E2C\] {
+  color: #F1F5F9;
+}
+html.dark .text-slate-900 {
+  color: #F8FAFC;
+}
+html.dark .text-slate-800 {
+  color: #E2E8F0;
+}
+html.dark .text-slate-700 {
+  color: #CBD5E1;
+}
+html.dark .text-slate-600 {
+  color: #94A3B8;
+}
+html.dark .text-slate-500 {
+  color: #94A3B8;
+}
+html.dark .border-slate-100,
+html.dark .border-slate-200,
+html.dark .border-slate-200\/80,
+html.dark .border-slate-200\/70,
+html.dark .border-slate-200\/50 {
+  border-color: #1E344E;
+}
+html.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+html.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #1E344E;
+}
+html.dark input:not([type="checkbox"]):not([type="radio"]),
+html.dark select,
+html.dark textarea {
+  background-color: #0E1A29;
+  color: #F1F5F9;
+  border-color: #1E344E;
+}
+html.dark thead {
+  background-color: #0B1622;
+}
+html.dark tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F1F5F9;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* Table Horizontal Scrollbar Styling */
+.table-scroll-container::-webkit-scrollbar {
+  height: 6px;
+}
+
+.table-scroll-container::-webkit-scrollbar-thumb {
+  background: #008A7B40;
+  border-radius: 4px;
+}
+
+.table-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: #008A7B90;
+}
+
+/* Print styles for Receipt modal */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #printable-receipt, #printable-receipt * {
+    visibility: visible;
+  }
+  #printable-receipt {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 20px;
+    background: white;
+    color: black;
+    box-shadow: none;
+    border: none;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
