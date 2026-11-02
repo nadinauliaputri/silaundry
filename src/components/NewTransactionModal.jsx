@@ -12,14 +12,15 @@ import { formatRupiah } from '../utils/helpers';
 export default function NewTransactionModal({
   isOpen,
   onClose,
-  onSave
+  onSave,
+  servicesList = []
 }) {
   const [formData, setFormData] = useState({
     namaPelanggan: '',
     nomorWhatsApp: '',
     alamatPelanggan: '',
-    jenisLayanan: 'Cuci Kiloan',
-    hargaPerKg: 7000,
+    jenisLayanan: servicesList[0]?.name || 'Cuci Kiloan',
+    hargaPerKg: servicesList[0]?.price || 7000,
     tanggalMasuk: '21/05/2025',
     tanggalSelesai: '23/05/2025',
     isLunas: true,
@@ -135,13 +136,31 @@ export default function NewTransactionModal({
               <div className="relative">
                 <select
                   value={formData.jenisLayanan}
-                  onChange={(e) => setFormData({ ...formData, jenisLayanan: e.target.value })}
+                  onChange={(e) => {
+                    const selectedName = e.target.value;
+                    const foundSvc = servicesList.find((s) => (s.name || s.nama) === selectedName);
+                    setFormData({
+                      ...formData,
+                      jenisLayanan: selectedName,
+                      hargaPerKg: foundSvc && foundSvc.price !== undefined ? foundSvc.price : formData.hargaPerKg,
+                    });
+                  }}
                   className="w-full px-3.5 py-2.5 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#008A7B]/20 focus:border-[#008A7B] transition-all appearance-none text-slate-800 cursor-pointer"
                 >
-                  <option value="Cuci Kiloan">Cuci Kiloan</option>
-                  <option value="Cuci Setrika">Cuci Setrika</option>
-                  <option value="Cuci Selimut">Cuci Selimut</option>
-                  <option value="Cuci Sepatu">Cuci Sepatu</option>
+                  {servicesList && servicesList.length > 0 ? (
+                    servicesList.map((svc) => (
+                      <option key={svc.id} value={svc.name || svc.nama}>
+                        {svc.name || svc.nama}
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="Cuci Kiloan">Cuci Kiloan</option>
+                      <option value="Cuci Setrika">Cuci Setrika</option>
+                      <option value="Cuci Selimut">Cuci Selimut</option>
+                      <option value="Cuci Sepatu">Cuci Sepatu</option>
+                    </>
+                  )}
                 </select>
                 <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>

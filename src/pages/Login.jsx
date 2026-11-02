@@ -29,7 +29,7 @@ export default function Login({
   const [errorMessage, setErrorMessage] = useState('');
   const [showForgotTip, setShowForgotTip] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage('');
 
@@ -44,16 +44,22 @@ export default function Login({
     }
 
     setIsSubmitting(true);
-
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
       if (onLogin) {
-        onLogin({
+        const result = await onLogin({
           email: formData.email,
+          password: formData.password,
           rememberMe: formData.rememberMe,
         });
+        if (result && result.error) {
+          setErrorMessage(result.error);
+        }
       }
-    }, 600);
+    } catch (err) {
+      setErrorMessage('Terjadi kesalahan. Silakan coba lagi.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

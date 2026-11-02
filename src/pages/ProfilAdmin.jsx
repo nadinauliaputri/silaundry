@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   User,
   Store,
@@ -12,6 +12,7 @@ import {
   Save,
   KeyRound
 } from 'lucide-react';
+import { supabase } from '../lib/supabaseClient';
 
 export default function ProfilAdmin({
   adminProfile,
@@ -32,6 +33,40 @@ export default function ProfilAdmin({
   });
 
   const [isSaved, setIsSaved] = useState(false);
+  const [profileId, setProfileId] = useState(null);
+
+  // Fetch profil dari Supabase berdasarkan profileId yang tersimpan di localStorage
+  useEffect(() => {
+    const storedId = localStorage.getItem('profileId');
+    console.log('profileId dari localStorage:', storedId);
+    if (storedId) {
+      setProfileId(storedId);
+      const fetchProfile = async () => {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', storedId)
+          .single();
+        if (error) {
+          console.error('Gagal fetch profil:', error);
+        } else if (data) {
+          console.log('Profil dimuat dari Supabase:', data);
+          setFormData((prev) => ({
+            ...prev,
+            namaToko: data.nama_toko || prev.namaToko,
+            namaAdmin: data.nama_admin || prev.namaAdmin,
+            email: data.email || prev.email,
+            whatsapp: data.no_whatsapp || prev.whatsapp,
+            alamatToko: data.alamat || prev.alamatToko,
+            jamOperasional: data.jam_operasional || prev.jamOperasional,
+          }));
+        }
+      };
+      fetchProfile();
+    } else {
+      console.warn('profileId tidak ditemukan di localStorage. Update ke Supabase tidak akan berjalan.');
+    }
+  }, []);
 
   // Handler saat nama toko diketik/berubah
   const handleStoreNameChange = (e) => {
@@ -47,8 +82,40 @@ export default function ProfilAdmin({
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const currentProfileId = profileId || localStorage.getItem('profileId');
+    console.log('handleSubmit - profileId:', currentProfileId);
+
+    if (currentProfileId) {
+      const updatePayload = {
+        nama_toko: formData.namaToko,
+        nama_admin: formData.namaAdmin,
+        no_whatsapp: formData.whatsapp,
+        email: formData.email,
+        alamat: formData.alamatToko,
+        jam_operasional: formData.jamOperasional,
+      };
+      console.log('Update payload:', updatePayload);
+
+      const { data: updatedData, error } = await supabase
+        .from('profiles')
+        .update(updatePayload)
+        .eq('id', currentProfileId)
+        .select();
+
+      if (error) {
+        console.error('Gagal update profil:', error);
+        alert(`Gagal menyimpan perubahan: ${error.message}`);
+        return;
+      }
+      console.log('Profil berhasil diperbarui di Supabase:', updatedData);
+    } else {
+      console.warn('Tidak ada profileId, update Supabase dilewati.');
+      alert('Perhatian: Profil tidak tersinkron dengan database. Silakan daftar ulang atau hubungi admin.');
+    }
+
     onUpdateProfile(formData);
     setIsSaved(true);
     if (onShowToast) {

@@ -9,6 +9,8 @@ import {
   CheckCircle2
 } from 'lucide-react';
 
+import { supabase } from '../lib/supabaseClient';
+
 export default function RegisterToko({ onBackToLanding, onRegisterSuccess, onEnterDashboard, onOpenLogin }) {
   const [formData, setFormData] = useState({
     namaToko: '',
@@ -23,7 +25,7 @@ export default function RegisterToko({ onBackToLanding, onRegisterSuccess, onEnt
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.agreeTerms) {
       alert('Silakan setujui Ketentuan Layanan dan Kebijakan Privasi terlebih dahulu.');
@@ -31,10 +33,56 @@ export default function RegisterToko({ onBackToLanding, onRegisterSuccess, onEnt
     }
 
     setIsSubmitting(true);
+    try {
+      // Langkah 1: Daftarkan akun Auth Supabase
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+      });
 
-    // Simulate registration
-    setTimeout(() => {
-      setIsSubmitting(false);
+      if (authError) {
+        console.error('Auth signUp error:', authError);
+        alert(`Gagal mendaftar akun: ${authError.message}`);
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (!authData?.user) {
+        alert('Pendaftaran gagal: user tidak dibuat. Silakan coba lagi.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      const authUserId = authData.user.id;
+      console.log('Auth user dibuat, id:', authUserId);
+
+      // Langkah 2: Insert data profil toko ke tabel `profiles` dengan id = authUserId
+      const profilePayload = {
+        id: authUserId,
+        nama_toko: formData.namaToko,
+        nama_admin: formData.namaAdmin,
+        no_whatsapp: formData.whatsapp,
+        email: formData.email,
+      };
+
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .insert([profilePayload])
+        .select();
+
+      if (profileError) {
+        console.error('Error inserting profile:', profileError);
+        alert(`Akun berhasil dibuat namun gagal menyimpan profil: ${profileError.message}`);
+        setIsSubmitting(false);
+        return;
+      }
+
+      console.log('Profile berhasil dibuat:', profileData);
+
+      // Simpan profileId ke localStorage
+      localStorage.setItem('profileId', authUserId);
+
+      alert('Pendaftaran berhasil! Silakan cek email untuk konfirmasi (jika diperlukan).');
       setIsSuccess(true);
 
       if (onRegisterSuccess) {
@@ -46,13 +94,19 @@ export default function RegisterToko({ onBackToLanding, onRegisterSuccess, onEnt
         });
       }
 
-      // Auto redirect to dashboard after 1.2s
+      // Auto redirect ke dashboard setelah 1.2 detik
       setTimeout(() => {
         if (onEnterDashboard) {
           onEnterDashboard();
         }
       }, 1200);
-    }, 600);
+
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      alert('Terjadi kesalahan tidak terduga. Silakan coba lagi.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

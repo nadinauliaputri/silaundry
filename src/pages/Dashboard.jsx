@@ -62,7 +62,7 @@ export default function Dashboard({
     }
   ]);
 
-  const rawServicesList = propServicesList || localServicesList;
+  const rawServicesList = (propServicesList && propServicesList.length > 0) ? propServicesList : localServicesList;
 
   const servicesList = rawServicesList.map((service, index) => {
     const codeNumber = String(index + 1).padStart(2, '0');
@@ -208,12 +208,12 @@ export default function Dashboard({
             return (
               <div
                 key={service.id || idx}
-                className={`rounded-2xl p-5 border border-slate-200/80 dark:border-slate-700/60 shadow-xs hover:shadow-sm transition-all flex flex-col justify-between relative group ${service.bgColor || 'bg-[#E6F8F5]'
+                className={`rounded-2xl p-5 border border-slate-200/80 dark:border-slate-700/60 shadow-xs hover:shadow-sm transition-all flex flex-col justify-between relative group ${service.bg_color || service.bgColor || 'bg-[#E6F8F5]'
                   } ${darkBgClass}`}
               >
                 {/* Top Row: Badge ID Layanan & Edit Button */}
                 <div className="flex items-center justify-between mb-6">
-                  <div className={`px-3 py-1 rounded-xl bg-white/90 dark:bg-black/30 backdrop-blur-md ${service.textColor || 'text-[#008A7B]'} dark:text-[#00C4B4] font-extrabold text-xs tracking-wider shadow-xs border border-black/5 dark:border-white/10 select-none`}>
+                  <div className={`px-3 py-1 rounded-xl bg-white/90 dark:bg-black/30 backdrop-blur-md ${service.text_color || service.textColor || 'text-[#008A7B]'} dark:text-[#00C4B4] font-extrabold text-xs tracking-wider shadow-xs border border-black/5 dark:border-white/10 select-none`}>
                     {service.serviceCode}
                   </div>
 

@@ -32,8 +32,9 @@ export default function TambahLayanan({
     });
 
     const [errors, setErrors] = useState({});
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-        useEffect(() => {
+    useEffect(() => {
         if (!isOpen) return;
         // Populate form when modal opens
         if (initialData) {
@@ -71,7 +72,7 @@ export default function TambahLayanan({
         setErrors({});
     }, [isOpen]);
 
-        useEffect(() => {
+    useEffect(() => {
         const handleKeyDown = (e) => {
             if (e.key === 'Escape' && isOpen) {
                 onClose();
@@ -100,35 +101,48 @@ export default function TambahLayanan({
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         if (!validate()) return;
+        setIsSubmitting(true);
+        try {
+            const payload = {
+                id: initialData?.id,
+                nama: formData.nama.trim(),
+                name: formData.nama.trim(),
+                harga: Number(formData.harga),
+                price: Number(formData.harga),
+                satuan: formData.satuan,
+                unit: formData.satuan,
+                estimasi: Number(formData.estimasi),
+                days: Number(formData.estimasi),
+                status: formData.status
+            };
 
-        const payload = {
-            id: initialData?.id,
-            nama: formData.nama.trim(),
-            name: formData.nama.trim(),
-            harga: Number(formData.harga),
-            price: Number(formData.harga),
-            satuan: formData.satuan,
-            unit: formData.satuan,
-            estimasi: Number(formData.estimasi),
-            days: Number(formData.estimasi),
-            status: formData.status
-        };
-
-        if (onSaveService) {
-            onSaveService(payload);
-        }
-        onClose();
-    };
-
-    const handleDelete = () => {
-        if (window.confirm(`Apakah Anda yakin ingin menghapus layanan "${formData.nama}"?`)) {
-            if (onDeleteService) {
-                onDeleteService(initialData?.id || initialData);
+            if (onSaveService) {
+                await onSaveService(payload);
             }
             onClose();
+        } catch (err) {
+            console.error('Submit error:', err);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (window.confirm(`Apakah Anda yakin ingin menghapus layanan "${formData.nama}"?`)) {
+            setIsSubmitting(true);
+            try {
+                if (onDeleteService) {
+                    await onDeleteService(initialData?.id || initialData);
+                }
+                onClose();
+            } catch (err) {
+                console.error('Delete error:', err);
+            } finally {
+                setIsSubmitting(false);
+            }
         }
     };
 
@@ -371,10 +385,19 @@ export default function TambahLayanan({
                             </button>
                             <button
                                 type="submit"
-                                className="px-5 py-2.5 rounded-xl bg-[#00A391] hover:bg-[#008A7B] text-white text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer"
+                                disabled={isSubmitting}
+                                className={`px-5 py-2.5 rounded-xl bg-[#00A391] hover:bg-[#008A7B] text-white text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center gap-2 ${
+                                    isSubmitting ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+                                }`}
                             >
                                 <Check className="w-4 h-4 stroke-[2.5]" />
-                                <span>{isEditMode ? 'Simpan Perubahan' : 'Tambah Layanan'}</span>
+                                <span>
+                                    {isSubmitting
+                                        ? 'Menyimpan...'
+                                        : isEditMode
+                                            ? 'Simpan Perubahan'
+                                            : 'Tambah Layanan'}
+                                </span>
                             </button>
                         </div>
                     </div>
