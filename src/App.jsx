@@ -148,12 +148,25 @@ export default function App() {
           setServicesList(svcData);
         }
 
-        const { data: custData, error: custErr } = await supabase.from('customers').select('*');
+        // Ambil data customers milik user yang sedang login
+        let custQuery = supabase.from('customers').select('*');
+        if (userId) {
+          custQuery = custQuery.eq('user_id', userId);
+        }
+        const { data: custData, error: custErr } = await custQuery;
         if (!custErr && custData && isMounted) {
           setCustomers(custData);
         }
 
-        const { data: trxData, error: trxErr } = await supabase.from('transactions').select('*');
+        // Ambil data transaksi milik user yang sedang login (filter by user_id)
+        let trxQuery = supabase
+          .from('transactions')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (userId) {
+          trxQuery = trxQuery.eq('user_id', userId);
+        }
+        const { data: trxData, error: trxErr } = await trxQuery;
         if (!trxErr && trxData && isMounted) {
           setTransactions(trxData);
         }
@@ -322,13 +335,17 @@ export default function App() {
         }
       }
 
-      // Refresh data customers terbaru
-      const { data: refreshedCust } = await supabase.from('customers').select('*');
-      if (refreshedCust) setCustomers(refreshedCust);
-
       // 3. Ambil user_id aktif via supabase.auth.getUser()
       const { data: { user } } = await supabase.auth.getUser();
       const userId = user ? user.id : (localStorage.getItem('profileId') || null);
+
+      // Refresh data customers terbaru (filter hanya milik user ini)
+      let refreshCustQuery = supabase.from('customers').select('*');
+      if (userId) {
+        refreshCustQuery = refreshCustQuery.eq('user_id', userId);
+      }
+      const { data: refreshedCust } = await refreshCustQuery;
+      if (refreshedCust) setCustomers(refreshedCust);
 
       const generatedId = generateSequentialId();
 
@@ -353,7 +370,15 @@ export default function App() {
         .single();
       if (trxError) throw trxError;
 
-      const { data: refreshedTx } = await supabase.from('transactions').select('*');
+      // Refresh transaksi terbaru (filter hanya milik user yang sedang login)
+      let refreshTrxQuery = supabase
+        .from('transactions')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (userId) {
+        refreshTrxQuery = refreshTrxQuery.eq('user_id', userId);
+      }
+      const { data: refreshedTx } = await refreshTrxQuery;
       if (refreshedTx) setTransactions(refreshedTx);
 
       showToast(`Pesanan nota ${insertedTrx.nota} (${insertedTrx.pelanggan}) berhasil ditambahkan!`);
@@ -677,7 +702,11 @@ export default function App() {
     }
   };
 
-  const inProgressCount = transactions.filter(t => t.statusLaundry === 'Dalam pengerjaan').length;
+  // Hitung transaksi aktif (belum selesai) untuk badge sidebar
+  const inProgressCount = transactions.filter(t => {
+    const st = (t.statusLaundry || '').toLowerCase();
+    return !st.includes('selesai');
+  }).length;
 
   return (
     <div className={`min-h-screen ${isDarkMode ? 'dark bg-[#0B131E] text-slate-100' : 'bg-[#F5F7FA] text-[#1E293B]'} flex relative transition-colors duration-300`}>
