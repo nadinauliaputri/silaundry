@@ -61,12 +61,13 @@ export default function ReceiptModal({
         });
 
         const link = document.createElement('a');
-        link.download = `Struk-${transaction.nota || 'Laundry'}.jpg`;
+        const notaName = transaction.nota || transaction.id || 'Laundry';
+        link.download = `Struk-${notaName}.jpg`;
         link.href = dataUrl;
         link.click();
 
         if (onShowToast) {
-          onShowToast(`Struk ${transaction.nota} berhasil disimpan sebagai JPG!`);
+          onShowToast(`Struk ${notaName} berhasil disimpan sebagai JPG!`);
         }
       } catch (err) {
         console.error('Gagal menyimpan gambar:', err);
@@ -176,7 +177,7 @@ export default function ReceiptModal({
                 STRUK LAUNDRY
               </h4>
               <span className="px-3 py-1 rounded-full bg-[#E6F8F5] text-[#008A7B] text-xs font-bold border border-[#00C4B4]/20">
-                {transaction.nota || 'NOTA-401'}
+                {transaction.nota || transaction.id || 'TRX-1'}
               </span>
             </div>
 
@@ -217,7 +218,9 @@ export default function ReceiptModal({
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Estimasi Selesai</span>
-                  <span className="font-semibold text-slate-800">3 Januari 2025</span>
+                  <span className="font-semibold text-slate-800">
+                    {formatTanggalMasuk(transaction.tanggalSelesai || transaction.estimasiSelesai) || '-'}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center pt-2 border-t border-slate-100">
                   <span className="text-slate-500">Status Pembayaran</span>

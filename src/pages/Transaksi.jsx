@@ -3,7 +3,7 @@ import {
   Search,
   Printer
 } from 'lucide-react';
-import { formatRupiah } from '../utils/helpers';
+import { formatRupiah, formatShortDate, getEstimatedCompletion } from '../utils/helpers';
 
 export default function Transaksi({
   transactions = [],
@@ -16,7 +16,7 @@ export default function Transaksi({
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
-  // Daftar kartu ringkasan di atas (pasif / non-clickable)
+  // Daftar kartu ringkasan status di bagian atas
   const summaryCards = [
     { id: 'Baru Masuk', label: 'BARU MASUK' },
     { id: 'Proses Cuci', label: 'PROSES CUCI' },
@@ -25,42 +25,45 @@ export default function Transaksi({
     { id: 'Selesai', label: 'SELESAI' },
   ];
 
-  // Hitung jumlah untuk tiap kategori kartu
-  const getCardCount = (cardId) => {
-    return transactions.filter(t => {
-      const st = (t.statusLaundry || '').toLowerCase();
-      if (cardId === 'Baru Masuk') return st.includes('baru masuk');
-      if (cardId === 'Proses Cuci') return st.includes('cuci') || st.includes('pengerjaan');
-      if (cardId === 'Proses Setrika') return st.includes('setrika');
-      if (cardId === 'Siap Diambil') return st.includes('siap diambil');
-      if (cardId === 'Selesai') return st.includes('selesai');
-      return false;
-    }).length;
+  // Fungsi normalisasi status laundry agar seragam antara database, kartu, dan filter
+  const normalizeStatus = (status) => {
+    const st = (status || '').trim().toLowerCase();
+    if (!st || st === 'baru masuk' || st === 'baru' || st === 'dalam pengerjaan') {
+      return 'Baru Masuk';
+    }
+    if (st.includes('cuci')) {
+      return 'Proses Cuci';
+    }
+    if (st.includes('setrika')) {
+      return 'Proses Setrika';
+    }
+    if (st.includes('siap diambil') || st.includes('siap ambil') || st.includes('siap')) {
+      return 'Siap Diambil';
+    }
+    if (st.includes('selesai')) {
+      return 'Selesai';
+    }
+    return status || 'Baru Masuk';
   };
 
-  // Logika Filter utama berdasarkan Dropdown Status Riwayat dan Pencarian
+  // Hitung jumlah untuk tiap kategori kartu secara dinamis dari data aktual transactions
+  const getCardCount = (cardId) => {
+    if (!transactions || !Array.isArray(transactions)) return 0;
+    return transactions.filter(t => normalizeStatus(t.statusLaundry) === cardId).length;
+  };
+
+  // Logika Filter utama berdasarkan Dropdown / Klik Kartu Status Riwayat dan Pencarian
   const filteredTransactions = transactions.filter(trx => {
-    const st = (trx.statusLaundry || '').toLowerCase();
+    const currentStatus = normalizeStatus(trx.statusLaundry);
 
     let matchesStatusFilter = true;
     if (statusFilter !== 'Semua Status') {
-      if (statusFilter === 'Baru Masuk') {
-        matchesStatusFilter = st.includes('baru masuk');
-      } else if (statusFilter === 'Proses Cuci') {
-        matchesStatusFilter = st.includes('cuci') || st.includes('pengerjaan');
-      } else if (statusFilter === 'Proses Setrika') {
-        matchesStatusFilter = st.includes('setrika');
-      } else if (statusFilter === 'Siap Diambil') {
-        matchesStatusFilter = st.includes('siap diambil');
-      } else if (statusFilter === 'Selesai') {
-        matchesStatusFilter = st.includes('selesai');
-      } else {
-        matchesStatusFilter = trx.statusLaundry === statusFilter;
-      }
+      matchesStatusFilter = currentStatus === statusFilter;
     }
 
     const matchesSearch =
       (trx.nota && trx.nota.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (trx.id && String(trx.id).toLowerCase().includes(searchTerm.toLowerCase())) ||
       (trx.pelanggan && trx.pelanggan.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (trx.telepon && trx.telepon.includes(searchTerm)) ||
       (trx.layanan && trx.layanan.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -75,13 +78,13 @@ export default function Transaksi({
   );
 
   const getStatusBadgeStyle = (status) => {
-    const st = (status || '').toLowerCase();
-    if (st.includes('baru masuk')) return 'bg-[#E6F8F5] dark:bg-[#008A7B]/20 text-[#008A7B] dark:text-[#00C4B4] border-[#008A7B]/25';
-    if (st.includes('cuci') || st.includes('pengerjaan')) return 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800';
-    if (st.includes('setrika')) return 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800';
-    if (st.includes('siap diambil')) return 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800';
-    if (st.includes('selesai')) return 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700';
-    return 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700';
+    const norm = normalizeStatus(status);
+    if (norm === 'Baru Masuk') return 'bg-[#E6F8F5] dark:bg-[#008A7B]/20 text-[#008A7B] dark:text-[#00C4B4] border-[#008A7B]/25';
+    if (norm === 'Proses Cuci') return 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800';
+    if (norm === 'Proses Setrika') return 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800';
+    if (norm === 'Siap Diambil') return 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800';
+    if (norm === 'Selesai') return 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700';
+    return 'bg-[#E6F8F5] dark:bg-[#008A7B]/20 text-[#008A7B] dark:text-[#00C4B4] border-[#008A7B]/25';
   };
 
   const getInitials = (name) => {
@@ -121,11 +124,16 @@ export default function Transaksi({
           const isActive = statusFilter === card.id;
           const count = getCardCount(card.id);
           return (
-            <div
+            <button
+              type="button"
               key={card.id}
-              className={`px-4 py-3.5 rounded-2xl border transition-all flex items-center justify-between gap-2 select-none ${isActive
+              onClick={() => {
+                setStatusFilter(prev => prev === card.id ? 'Semua Status' : card.id);
+                setCurrentPage(1);
+              }}
+              className={`px-4 py-3.5 rounded-2xl border transition-all flex items-center justify-between gap-2 select-none cursor-pointer text-left ${isActive
                   ? 'bg-[#EBF5F4] dark:bg-[#17303A] border-[#008A7B] dark:border-[#00C4B4] shadow-sm ring-1 ring-[#008A7B]/30'
-                  : 'bg-white dark:bg-[#172A3B] border-slate-200/80 dark:border-slate-700/60'
+                  : 'bg-white dark:bg-[#172A3B] border-slate-200/80 dark:border-slate-700/60 hover:border-slate-300 dark:hover:border-slate-600'
                 }`}
             >
               <span className={`text-[10px] font-extrabold tracking-wider truncate ${isActive ? 'text-[#008A7B] dark:text-[#00C4B4]' : 'text-slate-500 dark:text-slate-300'}`}>
@@ -137,7 +145,7 @@ export default function Transaksi({
                 }`}>
                 {count}
               </span>
-            </div>
+            </button>
           );
         })}
       </div>
@@ -205,15 +213,26 @@ export default function Transaksi({
                 paginatedItems.map((trx) => (
                   <tr key={trx.id} className="hover:bg-slate-50/80 dark:hover:bg-[#1D354A]/60 transition-colors">
                     <td className="py-4 px-5">
-                      <div className="font-extrabold text-[#101E2C] dark:text-white text-sm">{trx.nota}</div>
-                      <div className="flex items-center gap-1 text-[11px] text-slate-400 dark:text-slate-400 mt-0.5">
-                        <span>{trx.tanggalMasuk || '1 Jan 2025'}</span>
-                        {trx.tanggalKeluar && (
-                          <>
-                            <span>&rarr;</span>
-                            <span>{trx.tanggalKeluar}</span>
-                          </>
-                        )}
+                      <div className="font-extrabold text-[#101E2C] dark:text-white text-sm">
+                        {trx.nota}
+                      </div>
+                      <div className="mt-1 space-y-0.5 text-[11px] leading-tight">
+                        <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                          <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider w-12 shrink-0">
+                            Masuk
+                          </span>
+                          <span className="text-slate-700 dark:text-slate-300 font-medium">
+                            : {formatShortDate(trx.tanggalMasuk || 'Hari ini')}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-teal-600 dark:text-[#00C4B4]">
+                          <span className="text-[10px] font-bold text-teal-600/90 dark:text-[#00C4B4]/90 uppercase tracking-wider w-12 shrink-0">
+                            Selesai
+                          </span>
+                          <span className="font-bold">
+                            : {formatShortDate(getEstimatedCompletion(trx))}
+                          </span>
+                        </div>
                       </div>
                     </td>
 
@@ -247,7 +266,7 @@ export default function Transaksi({
 
                     <td className="py-4 px-5">
                       <select
-                        value={trx.statusLaundry || 'Baru Masuk'}
+                        value={normalizeStatus(trx.statusLaundry)}
                         onChange={(e) => onUpdateStatus && onUpdateStatus(trx.id, e.target.value)}
                         className={`text-xs font-bold px-3 py-1.5 rounded-xl border focus:outline-none cursor-pointer transition-all ${getStatusBadgeStyle(trx.statusLaundry)}`}
                       >

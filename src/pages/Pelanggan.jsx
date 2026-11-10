@@ -32,13 +32,36 @@ export default function Pelanggan({
 
   // Ubah data customer & riwayatnya menjadi list item per transaksi pelanggan
   const allCustomerTransactions = customers.flatMap(cust => {
+    const custPhone = cust.no_telepon || cust.telepon || '';
+    const matchedTransactions = transactions.filter(t =>
+      (t.pelanggan && cust.nama && t.pelanggan.toLowerCase() === cust.nama.toLowerCase()) ||
+      (t.telepon && custPhone && t.telepon === custPhone)
+    );
+
+    if (matchedTransactions.length > 0) {
+      return matchedTransactions.map((trx, idx) => ({
+        id: `${cust.id}-${trx.id || idx}`,
+        nota: trx.nota,
+        nama: cust.nama,
+        telepon: custPhone || trx.telepon,
+        alamat: cust.alamat || trx.alamat,
+        layanan: trx.layanan,
+        beratQty: trx.beratQty,
+        unit: trx.unit,
+        total: trx.total,
+        tanggalMasuk: trx.tanggalMasuk,
+        statusBayar: trx.statusBayar,
+        rawTransaction: trx
+      }));
+    }
+
     return (cust.riwayat || []).map((hist, idx) => {
       const matchedTrx = transactions.find(t => t.nota === hist.nota && t.pelanggan.toLowerCase() === cust.nama.toLowerCase());
       return {
         id: `${cust.id}-${idx}`,
         nota: hist.nota,
         nama: cust.nama,
-        telepon: cust.telepon,
+        telepon: custPhone,
         alamat: cust.alamat,
         layanan: matchedTrx ? matchedTrx.layanan : (cust.kategoriFavorit || 'Cuci Komplit Regular'),
         beratQty: matchedTrx ? matchedTrx.beratQty : 4.5,
@@ -50,7 +73,7 @@ export default function Pelanggan({
           id: Date.now() + idx,
           nota: hist.nota,
           pelanggan: cust.nama,
-          telepon: cust.telepon,
+          telepon: custPhone,
           alamat: cust.alamat,
           layanan: cust.kategoriFavorit || 'Cuci Komplit Regular',
           beratQty: 4.5,

@@ -10,6 +10,49 @@ export const formatRupiah = (number) => {
   }).format(number);
 };
 
+export const formatShortDate = (dateString) => {
+  if (!dateString || dateString === '-') return '-';
+  try {
+    const normalized = String(dateString).replace('T', ' ');
+    const parts = normalized.split(' ');
+    const datePart = parts[0];
+    const timePart = parts[1] ? parts[1].slice(0, 5) : '';
+
+    const [year, month, day] = datePart.split('-');
+    if (!year || !month || !day) return dateString;
+
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+    ];
+    const monthIndex = parseInt(month, 10) - 1;
+    const monthName = months[monthIndex] || month;
+
+    const formattedDate = `${parseInt(day, 10)} ${monthName} ${year}`;
+    return timePart ? `${formattedDate} (${timePart})` : formattedDate;
+  } catch {
+    return dateString;
+  }
+};
+
+export const getEstimatedCompletion = (trx) => {
+  if (!trx) return '-';
+  if (trx.tanggalSelesai) return trx.tanggalSelesai;
+  if (trx.estimasiSelesai) return trx.estimasiSelesai;
+  if (trx.tanggalKeluar) return trx.tanggalKeluar;
+  if (trx.tanggalMasuk) {
+    try {
+      const cleanDate = String(trx.tanggalMasuk).split(' ')[0].split('T')[0];
+      const d = new Date(cleanDate);
+      if (!isNaN(d.getTime())) {
+        d.setDate(d.getDate() + 2);
+        return d.toISOString().split('T')[0];
+      }
+    } catch {}
+  }
+  return '-';
+};
+
 export const getStatusBadgeClass = (status) => {
   switch (status) {
     case "Sudah selesai":
