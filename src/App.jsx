@@ -181,6 +181,39 @@ export default function App() {
 
     initAuthAndData();
 
+    // Supabase Realtime Channel untuk sinkronisasi otomatis tabel customers dan transactions
+    const realtimeChannel = supabase
+      .channel('app-realtime-channel')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'customers' },
+        async () => {
+          const { data: { session } } = await supabase.auth.getSession();
+          const uid = session?.user?.id || localStorage.getItem('profileId');
+          let cq = supabase.from('customers').select('*');
+          if (uid) cq = cq.eq('user_id', uid);
+          const { data: updatedCust } = await cq;
+          if (updatedCust && isMounted) {
+            setCustomers(updatedCust);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'transactions' },
+        async () => {
+          const { data: { session } } = await supabase.auth.getSession();
+          const uid = session?.user?.id || localStorage.getItem('profileId');
+          let tq = supabase.from('transactions').select('*').order('created_at', { ascending: false });
+          if (uid) tq = tq.eq('user_id', uid);
+          const { data: updatedTrx } = await tq;
+          if (updatedTrx && isMounted) {
+            setTransactions(updatedTrx);
+          }
+        }
+      )
+      .subscribe();
+
     // Listener perubahan status autentikasi Supabase
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!isMounted) return;
@@ -197,6 +230,7 @@ export default function App() {
     return () => {
       isMounted = false;
       subscription?.unsubscribe();
+      supabase.removeChannel(realtimeChannel);
     };
   }, []);
 
@@ -256,18 +290,20 @@ export default function App() {
 
       const phoneVariants = Array.from(new Set([rawPhone, normalized08, normalized62].filter(Boolean)));
 
-      // 1. Cek tabel customers berdasarkan nomor telepon
+      // 1. Ambil user_id aktif via supabase.auth.getUser() terlebih dahulu
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user ? user.id : (localStorage.getItem('profileId') || null);
+
+      // 2. Cek tabel customers berdasarkan nomor telepon
       let existingCust = null;
 
       for (const phone of phoneVariants) {
         if (existingCust) break;
 
         // Coba periksa di kolom no_telepon
-        const { data: byNoTelp } = await supabase
-          .from('customers')
-          .select('*')
-          .eq('no_telepon', phone)
-          .maybeSingle();
+        let q1 = supabase.from('customers').select('*').eq('no_telepon', phone);
+        if (userId) q1 = q1.eq('user_id', userId);
+        const { data: byNoTelp } = await q1.maybeSingle();
 
         if (byNoTelp) {
           existingCust = byNoTelp;
@@ -275,11 +311,9 @@ export default function App() {
         }
 
         // Coba periksa di kolom telepon
-        const { data: byTelp } = await supabase
-          .from('customers')
-          .select('*')
-          .eq('telepon', phone)
-          .maybeSingle();
+        let q2 = supabase.from('customers').select('*').eq('telepon', phone);
+        if (userId) q2 = q2.eq('user_id', userId);
+        const { data: byTelp } = await q2.maybeSingle();
 
         if (byTelp) {
           existingCust = byTelp;
@@ -301,12 +335,13 @@ export default function App() {
         if (foundInState) existingCust = foundInState;
       }
 
-      // 2. Jika no_telepon belum ada di tabel customers, simpan nama, no_telepon, dan alamat
+      // 3. Jika no_telepon belum ada di tabel customers, simpan nama, no_telepon, alamat, dan user_id
       if (!existingCust && rawPhone) {
         const newCustomerData = {
           nama: newTrxData.pelanggan || 'Pelanggan Baru',
           no_telepon: rawPhone,
           alamat: newTrxData.alamat || 'Surabaya',
+          ...(userId ? { user_id: userId } : {})
         };
 
         let { data: insertedCust, error: custInsertErr } = await supabase
@@ -315,29 +350,42 @@ export default function App() {
           .select()
           .maybeSingle();
 
-        // Fallback jika database menggunakan nama kolom `telepon` (error code 42703 di PostgreSQL)
-        if (custInsertErr && custInsertErr.code === '42703') {
+        // Fallback jika database menggunakan nama kolom `telepon`
+        if (custInsertErr) {
           const fallbackData = {
             nama: newTrxData.pelanggan || 'Pelanggan Baru',
             telepon: rawPhone,
             alamat: newTrxData.alamat || 'Surabaya',
+            ...(userId ? { user_id: userId } : {})
           };
-          const { data: fallbackCust } = await supabase
+          const { data: fallbackCust, error: fbErr } = await supabase
             .from('customers')
             .insert([fallbackData])
             .select()
             .maybeSingle();
-          insertedCust = fallbackCust;
+
+          // Jika gagal karena kolom user_id belum ada di tabel customers, insert tanpa user_id
+          if (fbErr && fbErr.code === '42703') {
+            const noUserCust = {
+              nama: newTrxData.pelanggan || 'Pelanggan Baru',
+              telepon: rawPhone,
+              alamat: newTrxData.alamat || 'Surabaya',
+            };
+            const { data: noUserRes } = await supabase
+              .from('customers')
+              .insert([noUserCust])
+              .select()
+              .maybeSingle();
+            insertedCust = noUserRes;
+          } else {
+            insertedCust = fallbackCust;
+          }
         }
 
         if (insertedCust) {
           setCustomers(prev => [insertedCust, ...prev]);
         }
       }
-
-      // 3. Ambil user_id aktif via supabase.auth.getUser()
-      const { data: { user } } = await supabase.auth.getUser();
-      const userId = user ? user.id : (localStorage.getItem('profileId') || null);
 
       // Refresh data customers terbaru (filter hanya milik user ini)
       let refreshCustQuery = supabase.from('customers').select('*');
@@ -663,6 +711,7 @@ export default function App() {
             transactions={transactions}
             onSelectReceipt={(trx) => setSelectedReceiptTrx(trx)}
             onOpenNewTransaction={() => setIsNewTrxModalOpen(true)}
+            onShowToast={showToast}
           />
         );
       case 'laporan':
@@ -676,6 +725,7 @@ export default function App() {
       case 'pendapatan':
         return (
           <Pendapatan
+            transactions={transactions}
             onShowToast={showToast}
           />
         );

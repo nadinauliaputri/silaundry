@@ -1,86 +1,177 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   FileSpreadsheet,
   Calendar,
   Coins
 } from 'lucide-react';
 import { formatRupiah } from '../utils/helpers';
+import { supabase } from '../lib/supabaseClient';
 
-export default function Pendapatan({ onShowToast }) {
+export default function Pendapatan({
+  transactions: propTransactions = [],
+  onShowToast
+}) {
+  const [transactions, setTransactions] = useState(propTransactions);
+
   // State Filter Periode Pendapatan
-  const [jenisPeriode, setJenisPeriode] = useState('Tahun spesifik');
-  const [pilihTahun, setPilihTahun] = useState('2026');
-  const [pilihBulan, setPilihBulan] = useState('2026-10');
-  const [tanggalSpesifik, setTanggalSpesifik] = useState('2026-10-19');
-  const [bulanMulai, setBulanMulai] = useState('2026-01');
-  const [bulanSelesai, setBulanSelesai] = useState('2026-10');
+  const now = new Date();
+  const currentYear = now.getFullYear().toString();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const currentDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-  // Master data transaksi disesuaikan persis dengan data di menu Transaksi
-  const allPendapatanData = [
-    {
-      tanggalRaw: '2026-10-19',
-      tanggal: '19 Oktober 2026',
-      statusBuku: 'Tutup Buku',
-      totalHarian: 36000,
-      transaksiList: [
-        { idNota: 'SL-01', pelanggan: 'Budi Santoso', layanan: 'Cuci Kiloan', berat: '4.5 Kg', hargaSatuan: 8000, total: 36000 }
-      ]
-    },
-    {
-      tanggalRaw: '2026-10-16',
-      tanggal: '16 Oktober 2026',
-      statusBuku: 'Tutup Buku',
-      totalHarian: 84000,
-      transaksiList: [
-        { idNota: 'SL-02', pelanggan: 'Siti Rahmawati', layanan: 'Cuci Kering Express', berat: '6 Kg', hargaSatuan: 14000, total: 84000 }
-      ]
-    },
-    {
-      tanggalRaw: '2026-10-15',
-      tanggal: '15 Oktober 2026',
-      statusBuku: 'Tutup Buku',
-      totalHarian: 70000,
-      transaksiList: [
-        { idNota: 'SL-03', pelanggan: 'Ahmad Fauzi', layanan: 'Bed Cover Jumbo + Sprei', berat: '2 Pcs', hargaSatuan: 35000, total: 70000 }
-      ]
-    },
-    {
-      tanggalRaw: '2026-10-11',
-      tanggal: '11 Oktober 2026',
-      statusBuku: 'Tutup Buku',
-      totalHarian: 48000,
-      transaksiList: [
-        { idNota: 'SL-04', pelanggan: 'Maya Putri', layanan: 'Cuci Kiloan', berat: '6 Kg', hargaSatuan: 8000, total: 48000 }
-      ]
-    },
-    {
-      tanggalRaw: '2026-09-19',
-      tanggal: '19 September 2026',
-      statusBuku: 'Tutup Buku',
-      totalHarian: 75000,
-      transaksiList: [
-        { idNota: 'SL-05', pelanggan: 'Dewi Lestari', layanan: 'Cuci Setrika', berat: '5 Kg', hargaSatuan: 15000, total: 75000 }
-      ]
+  const [jenisPeriode, setJenisPeriode] = useState('Semua Periode');
+  const [pilihTahun, setPilihTahun] = useState(currentYear);
+  const [pilihBulan, setPilihBulan] = useState(currentMonth);
+  const [tanggalSpesifik, setTanggalSpesifik] = useState(currentDate);
+  const [bulanMulai, setBulanMulai] = useState(`${currentYear}-01`);
+  const [bulanSelesai, setBulanSelesai] = useState(currentMonth);
+
+  // Sinkronisasi state lokal jika props berubah
+  useEffect(() => {
+    if (propTransactions && propTransactions.length > 0) {
+      setTransactions(propTransactions);
     }
-  ];
+  }, [propTransactions]);
+
+  // Fetch data transaksi khusus user yang sedang login & pasang Realtime listener
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchUserTransactions = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const userId = session?.user?.id || localStorage.getItem('profileId');
+
+        if (!userId) return;
+
+        let query = supabase
+          .from('transactions')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        query = query.eq('user_id', userId);
+
+        const { data, error } = await query;
+        if (!error && data && isMounted) {
+          setTransactions(data);
+        }
+      } catch (err) {
+        console.error('Error fetching transactions in Pendapatan:', err);
+      }
+    };
+
+    fetchUserTransactions();
+
+    const channel = supabase
+      .channel('pendapatan-realtime-page')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'transactions' },
+        () => {
+          fetchUserTransactions();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Format tanggal ke Bahasa Indonesia (contoh: 19 Oktober 2026)
+  const formatIndonesianDate = (dateStr) => {
+    if (!dateStr || dateStr === '-') return '-';
+    try {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+        return d.toLocaleDateString('id-ID', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric'
+        });
+      }
+      return new Date(dateStr).toLocaleDateString('id-ID', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  // Kelompokkan transaksi aktual dari database berdasarkan tanggal
+  const allPendapatanData = useMemo(() => {
+    const grouped = {};
+
+    transactions.forEach(trx => {
+      const dateKey = trx.tanggalMasuk || (trx.created_at ? trx.created_at.split('T')[0] : currentDate);
+
+      if (!grouped[dateKey]) {
+        grouped[dateKey] = {
+          tanggalRaw: dateKey,
+          tanggal: formatIndonesianDate(dateKey),
+          totalHarian: 0,
+          transaksiList: [],
+          allPaid: true
+        };
+      }
+
+      const totalVal = Number(trx.total) || 0;
+      const beratVal = Number(trx.beratQty) || 1;
+      const unitVal = trx.unit || 'kg';
+      const hargaSatuan = Number(trx.hargaSatuan) || (beratVal > 0 ? Math.round(totalVal / beratVal) : totalVal);
+
+      if (trx.statusBayar !== 'Lunas') {
+        grouped[dateKey].allPaid = false;
+      }
+
+      grouped[dateKey].totalHarian += totalVal;
+      grouped[dateKey].transaksiList.push({
+        idNota: trx.nota || trx.id || 'TRX',
+        pelanggan: trx.pelanggan || 'Pelanggan',
+        layanan: trx.layanan || 'Reguler',
+        berat: `${beratVal} ${unitVal}`,
+        hargaSatuan: hargaSatuan,
+        total: totalVal,
+        statusBayar: trx.statusBayar || 'Lunas'
+      });
+    });
+
+    // Urutkan tanggal secara descending (terbaru di atas)
+    return Object.values(grouped)
+      .map(item => ({
+        ...item,
+        statusBuku: item.allPaid ? 'Tutup Buku' : 'Buku Aktif'
+      }))
+      .sort((a, b) => b.tanggalRaw.localeCompare(a.tanggalRaw));
+  }, [transactions, currentDate]);
 
   // Logika Filter Berdasarkan Jenis Periode yang Dipilih
-  const filteredPendapatanList = allPendapatanData.filter(item => {
-    if (jenisPeriode === 'Tanggal spesifik') {
-      return item.tanggalRaw === tanggalSpesifik;
-    } else if (jenisPeriode === 'Bulan spesifik') {
-      return item.tanggalRaw.startsWith(pilihBulan);
-    } else if (jenisPeriode === 'Tahun spesifik') {
-      return item.tanggalRaw.startsWith(pilihTahun);
-    } else if (jenisPeriode === 'Rentang bulan') {
-      const itemBulan = item.tanggalRaw.substring(0, 7);
-      return itemBulan >= bulanMulai && itemBulan <= bulanSelesai;
-    }
-    return true;
-  });
+  const filteredPendapatanList = useMemo(() => {
+    return allPendapatanData.filter(item => {
+      if (jenisPeriode === 'Semua Periode') {
+        return true;
+      } else if (jenisPeriode === 'Tanggal spesifik') {
+        return item.tanggalRaw === tanggalSpesifik;
+      } else if (jenisPeriode === 'Bulan spesifik') {
+        return item.tanggalRaw.startsWith(pilihBulan);
+      } else if (jenisPeriode === 'Tahun spesifik') {
+        return item.tanggalRaw.startsWith(pilihTahun);
+      } else if (jenisPeriode === 'Rentang bulan') {
+        const itemBulan = item.tanggalRaw.substring(0, 7);
+        return itemBulan >= bulanMulai && itemBulan <= bulanSelesai;
+      }
+      return true;
+    });
+  }, [allPendapatanData, jenisPeriode, tanggalSpesifik, pilihBulan, pilihTahun, bulanMulai, bulanSelesai]);
 
   // Total keseluruhan berdasarkan hasil filter
-  const totalKeseluruhan = filteredPendapatanList.reduce((acc, curr) => acc + curr.totalHarian, 0);
+  const totalKeseluruhan = useMemo(() => {
+    return filteredPendapatanList.reduce((acc, curr) => acc + curr.totalHarian, 0);
+  }, [filteredPendapatanList]);
 
   // Export Excel dengan format .xls agar otomatis rapi terpisah per kolom
   const handleExportExcel = () => {
@@ -100,6 +191,7 @@ export default function Pendapatan({ onShowToast }) {
       <body>
         <h2>Laporan Rekapitulasi Pendapatan SI LAUNDRY</h2>
         <p>Periode Filter: ${jenisPeriode} (${jenisPeriode === 'Bulan spesifik' ? pilihBulan : jenisPeriode === 'Tanggal spesifik' ? tanggalSpesifik : pilihTahun})</p>
+        <p>Total Pendapatan: Rp ${totalKeseluruhan.toLocaleString('id-ID')}</p>
         <table>
           <thead>
             <tr>
@@ -144,14 +236,14 @@ export default function Pendapatan({ onShowToast }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Laporan_Pendapatan_SI_LAUNDRY.xls`;
+    a.download = `Laporan_Pendapatan_SI_LAUNDRY_${currentDate}.xls`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
     if (onShowToast) {
-      onShowToast('File Excel Berhasil Diexport dengan Format Kolom Rapi!');
+      onShowToast('File Excel Berhasil Diexport dengan Format Kolom Rapi!', 'success');
     }
   };
 
@@ -167,7 +259,7 @@ export default function Pendapatan({ onShowToast }) {
             Pendapatan
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Rekapitulasi omset harian berdasarkan filter periode dan rincian transaksi kasir.
+            Rekapitulasi omset harian berdasarkan filter periode dan rincian transaksi kasir real-time.
           </p>
         </div>
 
@@ -189,11 +281,19 @@ export default function Pendapatan({ onShowToast }) {
             </div>
             <div>
               <h3 className="font-extrabold text-sm text-[#101E2C] dark:text-white">Filter periode pendapatan</h3>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">Pilih satu tanggal, satu bulan, rentang bulan, atau satu tahun.</p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">Pilih semua periode, satu tanggal, satu bulan, rentang bulan, atau tahun.</p>
             </div>
           </div>
           <span className="px-3 py-1 rounded-full bg-[#E6F8F5] dark:bg-[#008A7B]/20 text-[#008A7B] dark:text-[#00C4B4] text-xs font-extrabold border border-[#00C4B4]/20 dark:border-[#00C4B4]/40">
-            {jenisPeriode === 'Bulan spesifik' ? `Bulan: ${pilihBulan}` : jenisPeriode === 'Tanggal spesifik' ? `Tgl: ${tanggalSpesifik}` : `${jenisPeriode} ${pilihTahun}`}
+            {jenisPeriode === 'Semua Periode'
+              ? 'Semua Periode'
+              : jenisPeriode === 'Bulan spesifik'
+              ? `Bulan: ${pilihBulan}`
+              : jenisPeriode === 'Tanggal spesifik'
+              ? `Tgl: ${tanggalSpesifik}`
+              : jenisPeriode === 'Rentang bulan'
+              ? `Rentang: ${bulanMulai} - ${bulanSelesai}`
+              : `Tahun ${pilihTahun}`}
           </span>
         </div>
 
@@ -209,6 +309,7 @@ export default function Pendapatan({ onShowToast }) {
               onChange={(e) => setJenisPeriode(e.target.value)}
               className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-[#112232] border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#008A7B]/20 focus:border-[#008A7B]"
             >
+              <option value="Semua Periode" className="dark:bg-[#112232]">Semua Periode</option>
               <option value="Tanggal spesifik" className="dark:bg-[#112232]">Tanggal spesifik</option>
               <option value="Bulan spesifik" className="dark:bg-[#112232]">Bulan spesifik</option>
               <option value="Tahun spesifik" className="dark:bg-[#112232]">Tahun spesifik</option>
@@ -217,20 +318,30 @@ export default function Pendapatan({ onShowToast }) {
           </div>
 
           {/* Conditional Input based on Jenis Periode */}
+          {jenisPeriode === 'Semua Periode' && (
+            <div>
+              <label className="block text-[11px] font-extrabold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                Keterangan
+              </label>
+              <div className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-[#112232] border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-500 dark:text-slate-400">
+                Menampilkan seluruh rekapan pendapatan toko
+              </div>
+            </div>
+          )}
+
           {jenisPeriode === 'Tahun spesifik' && (
             <div>
               <label className="block text-[11px] font-extrabold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                 Pilih Tahun
               </label>
-              <select
+              <input
+                type="number"
+                min="2020"
+                max="2035"
                 value={pilihTahun}
                 onChange={(e) => setPilihTahun(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-[#112232] border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#008A7B]/20 focus:border-[#008A7B]"
-              >
-                <option value="2026" className="dark:bg-[#112232]">2026</option>
-                <option value="2025" className="dark:bg-[#112232]">2025</option>
-                <option value="2024" className="dark:bg-[#112232]">2024</option>
-              </select>
+                className="w-full px-4 py-2 rounded-xl bg-slate-50 dark:bg-[#112232] border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#008A7B]/20 focus:border-[#008A7B]"
+              />
             </div>
           )}
 
@@ -287,7 +398,7 @@ export default function Pendapatan({ onShowToast }) {
         </div>
       </div>
 
-      {/* BANNER TOTAL PENDAPATAN KESELURUHAN (ON DARK MODE: Black bg + Toska border) */}
+      {/* BANNER TOTAL PENDAPATAN KESELURUHAN */}
       <div className="bg-[#101E2C] dark:bg-black rounded-3xl p-6 sm:p-8 text-white dark:text-white relative overflow-hidden shadow-sm border border-slate-800 dark:border-[#00C4B4] transition-colors duration-300">
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
           <div>
@@ -302,15 +413,7 @@ export default function Pendapatan({ onShowToast }) {
               Akumulasi seluruh transaksi pada periode filter yang aktif
             </p>
           </div>
-
-          <button
-            onClick={() => alert('Detail rincian kalkulasi omset kasir.')}
-            className="px-5 py-3 rounded-2xl bg-[#008A7B] hover:bg-[#007063] dark:bg-[#008A7B] dark:hover:bg-[#007063] text-white text-xs font-bold shadow-sm transition-all self-start sm:self-auto cursor-pointer"
-          >
-            Lihat rincian kasir
-          </button>
         </div>
-        {/* Glow effect for dark mode prominence */}
         <div className="absolute right-0 top-0 w-80 h-80 bg-[#00C4B4]/10 dark:bg-[#00C4B4]/15 rounded-full blur-3xl pointer-events-none" />
       </div>
 
@@ -346,7 +449,11 @@ export default function Pendapatan({ onShowToast }) {
                   <div className="flex items-center gap-3">
                     <span className="w-2.5 h-2.5 rounded-full bg-[#008A7B] dark:bg-[#00C4B4]" />
                     <span className="font-extrabold text-sm text-[#101E2C] dark:text-white">{item.tanggal}</span>
-                    <span className="px-2.5 py-0.5 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800 rounded-full text-[10px] font-extrabold">
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                      item.statusBuku === 'Tutup Buku'
+                        ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200/60 dark:border-emerald-800'
+                        : 'bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-200/60 dark:border-amber-800'
+                    }`}>
                       {item.statusBuku}
                     </span>
                   </div>
@@ -357,7 +464,7 @@ export default function Pendapatan({ onShowToast }) {
                   </div>
                 </div>
 
-                {/* Table Rincian Transaksi dalam Tanggal Tersebut (Kolom Harga Satuan) */}
+                {/* Table Rincian Transaksi dalam Tanggal Tersebut */}
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs whitespace-nowrap">
                     <thead className="bg-slate-50 dark:bg-[#112232] text-slate-500 dark:text-slate-300 uppercase font-bold text-[10px] tracking-wider">
@@ -367,6 +474,7 @@ export default function Pendapatan({ onShowToast }) {
                         <th className="py-2.5 px-4">Layanan</th>
                         <th className="py-2.5 px-4">Berat</th>
                         <th className="py-2.5 px-4">Harga Satuan</th>
+                        <th className="py-2.5 px-4">Status Bayar</th>
                         <th className="py-2.5 px-4 rounded-r-xl text-right border-r dark:border-slate-700/50">Sub Total</th>
                       </tr>
                     </thead>
@@ -379,6 +487,15 @@ export default function Pendapatan({ onShowToast }) {
                           <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{trx.berat}</td>
                           <td className="py-3 px-4 font-medium text-slate-600 dark:text-slate-300">
                             {formatRupiah(trx.hargaSatuan)}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              trx.statusBayar === 'Lunas'
+                                ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300'
+                                : 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300'
+                            }`}>
+                              {trx.statusBayar}
+                            </span>
                           </td>
                           <td className="py-3 px-4 text-right font-black text-[#101E2C] dark:text-white border-r dark:border-slate-700/50">
                             {formatRupiah(trx.total)}
