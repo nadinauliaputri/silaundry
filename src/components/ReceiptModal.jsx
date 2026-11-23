@@ -1,11 +1,13 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { X, Printer, CheckCircle, Settings, Download, Bluetooth } from 'lucide-react';
 import { toJpeg } from 'html-to-image';
 import { formatRupiah } from '../utils/helpers';
+import { supabase } from '../lib/supabaseClient';
 
 export default function ReceiptModal({
   isOpen,
   transaction,
+  adminProfile,
   onClose,
   onShowToast
 }) {
@@ -14,9 +16,124 @@ export default function ReceiptModal({
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSavingImage, setIsSavingImage] = useState(false);
 
+  // State profil toko dinamis untuk header struk
+  const [profile, setProfile] = useState(() => ({
+    namaToko: adminProfile?.namaToko || '',
+    namaAdmin: adminProfile?.namaAdmin || '',
+    alamat: adminProfile?.alamatToko || adminProfile?.alamat || '',
+    whatsapp: adminProfile?.whatsapp || '',
+    email: adminProfile?.email || '',
+    jamOperasional: adminProfile?.jamOperasional || ''
+  }));
+
   const receiptRef = useRef(null);
 
+  // Sinkronisasi jika prop adminProfile dari parent diperbarui
+  useEffect(() => {
+    if (adminProfile) {
+      setProfile(prev => ({
+        namaToko: adminProfile.namaToko || prev.namaToko,
+        namaAdmin: adminProfile.namaAdmin || prev.namaAdmin,
+        alamat: adminProfile.alamatToko || adminProfile.alamat || prev.alamat,
+        whatsapp: adminProfile.whatsapp || prev.whatsapp,
+        email: adminProfile.email || prev.email,
+        jamOperasional: adminProfile.jamOperasional || prev.jamOperasional,
+      }));
+    }
+  }, [adminProfile]);
+
+  // Fetch profil toko dari Supabase & pasang listener Realtime
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchStoreProfile = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const userId = session?.user?.id || localStorage.getItem('profileId');
+        if (!userId) return;
+
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (!error && data && isMounted) {
+          setProfile({
+            namaToko: data.nama_toko || '',
+            namaAdmin: data.nama_admin || '',
+            alamat: data.alamat || '',
+            whatsapp: data.no_whatsapp || '',
+            email: data.email || session?.user?.email || '',
+            jamOperasional: data.jam_operasional || ''
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching profile in ReceiptModal:', err);
+      }
+    };
+
+    if (isOpen) {
+      fetchStoreProfile();
+    }
+
+    const channel = supabase
+      .channel('receipt-profile-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'profiles'
+        },
+        async (payload) => {
+          const { data: { session } } = await supabase.auth.getSession();
+          const userId = session?.user?.id || localStorage.getItem('profileId');
+
+          if (payload?.new && (!payload.new.id || payload.new.id === userId)) {
+            if (isMounted) {
+              setProfile({
+                namaToko: payload.new.nama_toko || '',
+                namaAdmin: payload.new.nama_admin || '',
+                alamat: payload.new.alamat || '',
+                whatsapp: payload.new.no_whatsapp || '',
+                email: payload.new.email || session?.user?.email || '',
+                jamOperasional: payload.new.jam_operasional || ''
+              });
+              return;
+            }
+          }
+          fetchStoreProfile();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, [isOpen]);
+
   if (!isOpen || !transaction) return null;
+
+  // Mapping identitas toko dengan fallback default yang rapi
+  const storeName = (profile.namaToko || adminProfile?.namaToko || 'SI LAUNDRY').toUpperCase();
+  const storeAddress = profile.alamat || adminProfile?.alamatToko || 'Alamat gerai laundry';
+  const rawWa = profile.whatsapp || adminProfile?.whatsapp || '';
+  const rawEmail = profile.email || adminProfile?.email || '';
+
+  let contactInfo = '';
+  if (rawWa && rawEmail) {
+    contactInfo = `${rawWa} • ${rawEmail}`;
+  } else if (rawWa) {
+    contactInfo = rawWa;
+  } else if (rawEmail) {
+    contactInfo = rawEmail;
+  } else {
+    contactInfo = 'No. Kontak & Email belum diatur';
+  }
+
+  const adminName = profile.namaAdmin || adminProfile?.namaAdmin || 'Admin';
 
   // Fungsi helper untuk memformat tanggal string dengan pembatas vertikal "|"
   const formatTanggalMasuk = (dateString) => {
@@ -84,17 +201,19 @@ export default function ReceiptModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
       {/* Modal Container */}
       <div
-        className={`relative w-full bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100 transition-all ${paperSize === '58mm' ? 'max-w-md' : 'max-w-lg'
-          }`}
+        className={`relative w-full bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[90vh] transition-all ${
+          paperSize === '58mm' ? 'max-w-md' : 'max-w-lg'
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Top Control Bar */}
-        <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+        {/* Top Control Bar (Fixed Header) */}
+        <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-              className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${isSettingsOpen ? 'bg-[#008A7B] text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                }`}
+              className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                isSettingsOpen ? 'bg-[#008A7B] text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+              }`}
             >
               <Settings className="w-4 h-4" />
               <span>Pengaturan Printer</span>
@@ -109,9 +228,9 @@ export default function ReceiptModal({
           </button>
         </div>
 
-        {/* Panel Pengaturan Printer & Ukuran Kertas */}
+        {/* Panel Pengaturan Printer & Ukuran Kertas (Collapsible Header Panel) */}
         {isSettingsOpen && (
-          <div className="bg-slate-800 px-6 py-4 border-t border-slate-700 space-y-3 text-xs text-slate-200 animate-fadeIn">
+          <div className="bg-slate-800 px-6 py-4 border-t border-slate-700 space-y-3 text-xs text-slate-200 animate-fadeIn shrink-0">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-400 mb-1">
@@ -151,20 +270,23 @@ export default function ReceiptModal({
           </div>
         )}
 
-        {/* Scrollable Container untuk Tampilan di Layar */}
-        <div className="max-h-[75vh] overflow-y-auto">
+        {/* Scrollable Container untuk Tampilan di Layar (Flex-1 Overflow Auto) */}
+        <div className="flex-1 overflow-y-auto min-h-0">
           {/* Receipt Content yang dibungkus Ref */}
           <div ref={receiptRef} className="p-6 sm:p-8 space-y-5 bg-white">
-            {/* 1. Header Toko */}
-            <div className="text-center pt-2">
+            {/* 1. Header Toko Dinamis */}
+            <div className="text-center pt-2 space-y-0.5">
               <h3 className="font-black text-base sm:text-lg tracking-wide text-[#101E2C] uppercase">
-                NAMA TOKO LAUNDRY ANDA
+                {storeName}
               </h3>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                Jl. Melati No. 25, Kota Bandung
+              <p className="text-[11px] text-slate-500">
+                {storeAddress}
               </p>
               <p className="text-[11px] text-slate-500">
-                0812 3456 7890 &bull; admin@laundry.id
+                {contactInfo}
+              </p>
+              <p className="text-[11px] text-slate-600 font-semibold pt-0.5">
+                Admin: {adminName}
               </p>
             </div>
 
@@ -193,7 +315,7 @@ export default function ReceiptModal({
               </div>
               <div className="flex">
                 <span className="w-20 text-slate-500">Alamat</span>
-                <span className="font-bold text-[#101E2C] truncate">: {transaction.alamat || 'Jl. Melati No. 18'}</span>
+                <span className="font-bold text-[#101E2C] truncate">: {transaction.alamat || '-'}</span>
               </div>
             </div>
 
@@ -252,8 +374,8 @@ export default function ReceiptModal({
           </div>
         </div>
 
-        {/* Action Footer Buttons */}
-        <div className="p-6 pt-4 flex flex-wrap items-center justify-between gap-3 bg-white border-t border-slate-100">
+        {/* Action Footer Buttons (Fixed Bottom) */}
+        <div className="p-6 pt-4 flex flex-wrap items-center justify-between gap-3 bg-white border-t border-slate-100 shrink-0">
           <button
             type="button"
             onClick={handleSaveAsImage}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Pencil,
   Plus,
@@ -7,15 +7,112 @@ import {
 } from 'lucide-react';
 import { formatRupiah } from '../utils/helpers';
 import TambahLayanan from '../components/TambahLayanan';
+import { supabase } from '../lib/supabaseClient';
+
+// Fungsi helper sapaan otomatis berdasarkan jam lokal saat ini
+const getTimeGreeting = () => {
+  const hours = new Date().getHours();
+  if (hours >= 4 && hours < 11) {
+    return 'Selamat pagi';
+  } else if (hours >= 11 && hours < 15) {
+    return 'Selamat siang';
+  } else if (hours >= 15 && hours < 18) {
+    return 'Selamat sore';
+  } else {
+    return 'Selamat malam';
+  }
+};
 
 export default function Dashboard({
   transactions,
+  adminProfile,
   onSelectReceipt,
   onOpenNewTransaction,
   servicesList: propServicesList,
   onOpenAddService,
   onOpenEditService
 }) {
+  // State sapaan waktu otomatis (real-time clock)
+  const [greeting, setGreeting] = useState(getTimeGreeting);
+
+  // State nama pengguna/admin aktif
+  const [namaAdmin, setNamaAdmin] = useState(adminProfile?.namaAdmin || 'Admin');
+
+  // Interval real-time 1 menit untuk update sapaan waktu tanpa perlu refresh
+  useEffect(() => {
+    setGreeting(getTimeGreeting());
+
+    const intervalId = setInterval(() => {
+      setGreeting(getTimeGreeting());
+    }, 60000); // Tiap 1 menit
+
+    return () => clearInterval(intervalId);
+  }, []);
+
+  // Sinkronisasi dengan prop adminProfile jika ada perubahan dari parent
+  useEffect(() => {
+    if (adminProfile?.namaAdmin) {
+      setNamaAdmin(adminProfile.namaAdmin);
+    }
+  }, [adminProfile?.namaAdmin]);
+
+  // Fetch nama admin dari Supabase profiles & pasang listener real-time postgres_changes
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchProfileName = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const userId = session?.user?.id || localStorage.getItem('profileId');
+        if (!userId) return;
+
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('nama_admin')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (!error && data?.nama_admin && isMounted) {
+          setNamaAdmin(data.nama_admin);
+        }
+      } catch (err) {
+        console.error('Error fetching profile in Dashboard:', err);
+      }
+    };
+
+    fetchProfileName();
+
+    const profileChannel = supabase
+      .channel('dashboard-profile-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'profiles'
+        },
+        async (payload) => {
+          const { data: { session } } = await supabase.auth.getSession();
+          const userId = session?.user?.id || localStorage.getItem('profileId');
+
+          // Periksa apakah perubahan ini milik user yang sedang login
+          if (payload?.new && (!payload.new.id || payload.new.id === userId)) {
+            if (payload.new.nama_admin && isMounted) {
+              setNamaAdmin(payload.new.nama_admin);
+              return;
+            }
+          }
+          fetchProfileName();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(profileChannel);
+    };
+  }, []);
+
   // Ubah inisial awal menjadi array kosong [] agar user baru melihat dashboard kosong
   const [localServicesList, setLocalServicesList] = useState([]);
 
@@ -108,7 +205,7 @@ export default function Dashboard({
             RUANG KERJA TOKO
           </span>
           <h2 className="text-xl sm:text-2xl font-black text-[#101E2C] dark:text-white tracking-tight mt-0.5">
-            Selamat pagi, Admin.
+            {greeting}, {namaAdmin || 'Admin'}.
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             Pilih layanan atau catat cucian pelanggan yang baru masuk.

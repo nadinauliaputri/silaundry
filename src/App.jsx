@@ -212,6 +212,32 @@ export default function App() {
           }
         }
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles' },
+        async () => {
+          const { data: { session } } = await supabase.auth.getSession();
+          const uid = session?.user?.id || localStorage.getItem('profileId');
+          if (uid) {
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', uid)
+              .maybeSingle();
+
+            if (profileData && isMounted) {
+              setAdminProfile({
+                namaToko: profileData.nama_toko || 'SI LAUNDRY',
+                namaAdmin: profileData.nama_admin || 'Admin',
+                email: profileData.email || session?.user?.email,
+                whatsapp: profileData.no_whatsapp || '',
+                alamatToko: profileData.alamat || '',
+                jamOperasional: profileData.jam_operasional || '',
+              });
+            }
+          }
+        }
+      )
       .subscribe();
 
     // Listener perubahan status autentikasi Supabase
@@ -687,6 +713,7 @@ export default function App() {
         return (
           <Dashboard
             transactions={transactions}
+            adminProfile={adminProfile}
             onSelectReceipt={(trx) => setSelectedReceiptTrx(trx)}
             onOpenNewTransaction={() => setIsNewTrxModalOpen(true)}
             servicesList={servicesList}
@@ -742,6 +769,7 @@ export default function App() {
         return (
           <Dashboard
             transactions={transactions}
+            adminProfile={adminProfile}
             onSelectReceipt={(trx) => setSelectedReceiptTrx(trx)}
             onOpenNewTransaction={() => setIsNewTrxModalOpen(true)}
             servicesList={servicesList}
@@ -793,7 +821,9 @@ export default function App() {
       <ReceiptModal
         isOpen={Boolean(selectedReceiptTrx)}
         transaction={selectedReceiptTrx}
+        adminProfile={adminProfile}
         onClose={() => setSelectedReceiptTrx(null)}
+        onShowToast={showToast}
       />
 
       <PasswordModal
