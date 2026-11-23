@@ -100,6 +100,7 @@ export default function App() {
             .maybeSingle();
 
           if (profileData && isMounted) {
+            const avatarUrl = profileData.avatar_url || profileData.avatar || profileData.logo_url || (userId ? localStorage.getItem('silaundry_avatar_' + userId) : null) || null;
             setAdminProfile({
               namaToko: profileData.nama_toko || 'SI LAUNDRY',
               namaAdmin: profileData.nama_admin || 'Admin',
@@ -107,8 +108,10 @@ export default function App() {
               whatsapp: profileData.no_whatsapp || '',
               alamatToko: profileData.alamat || '',
               jamOperasional: profileData.jam_operasional || '',
+              avatar: avatarUrl,
             });
           } else if (isMounted) {
+            const avatarUrl = userId ? localStorage.getItem('silaundry_avatar_' + userId) : null;
             setAdminProfile({
               namaToko: 'SI LAUNDRY',
               namaAdmin: currentUser.user_metadata?.namaAdmin || 'Admin',
@@ -116,6 +119,7 @@ export default function App() {
               whatsapp: '',
               alamatToko: '',
               jamOperasional: '',
+              avatar: avatarUrl,
             });
           }
 
@@ -226,6 +230,7 @@ export default function App() {
               .maybeSingle();
 
             if (profileData && isMounted) {
+              const avatarUrl = profileData.avatar_url || profileData.avatar || profileData.logo_url || (uid ? localStorage.getItem('silaundry_avatar_' + uid) : null) || null;
               setAdminProfile({
                 namaToko: profileData.nama_toko || 'SI LAUNDRY',
                 namaAdmin: profileData.nama_admin || 'Admin',
@@ -233,6 +238,7 @@ export default function App() {
                 whatsapp: profileData.no_whatsapp || '',
                 alamatToko: profileData.alamat || '',
                 jamOperasional: profileData.jam_operasional || '',
+                avatar: avatarUrl,
               });
             }
           }
@@ -269,9 +275,10 @@ export default function App() {
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
+    const duration = type === 'error' ? 6500 : 3500;
     setTimeout(() => {
       setToast(null);
-    }, 3500);
+    }, duration);
   };
 
   // Handle Logout — redirect to landing page
@@ -286,20 +293,66 @@ export default function App() {
     showToast('Anda berhasil keluar dari akun admin.', 'success');
   };
 
-  // Fungsi generator ID transaksi otomatis berurutan: TRX-1, TRX-2, dst.
-  const generateSequentialId = () => {
-    const existingIds = new Set(
-      transactions.flatMap(t => [
-        String(t.id || '').toUpperCase(),
-        String(t.nota || '').toUpperCase()
-      ])
-    );
+  // Fungsi generator nomor nota urut khusus per akun toko (TRX-1, TRX-2, dst.)
+  const generateNextNoNota = async (currentUserId) => {
+    let maxNum = 0;
+    const existingNumbers = new Set();
 
-    let nextNum = transactions.length + 1;
-    while (existingIds.has(`TRX-${nextNum}`)) {
+    // 1. Ambil data transaksi milik akun toko ini saja dari database
+    try {
+      let query = supabase.from('transactions').select('no_nota, id');
+      if (currentUserId) {
+        query = query.eq('user_id', currentUserId);
+      }
+      const { data: userTrx, error } = await query;
+
+      if (!error && userTrx) {
+        userTrx.forEach(row => {
+          const candidates = [row.no_nota, row.id];
+          candidates.forEach(cand => {
+            if (cand) {
+              const match = String(cand).trim().match(/^TRX-(\d+)$/i);
+              if (match) {
+                const num = parseInt(match[1], 10);
+                existingNumbers.add(num);
+                if (num > maxNum) maxNum = num;
+              }
+            }
+          });
+        });
+      }
+    } catch (e) {
+      console.warn('Gagal cek nomor nota dari database:', e);
+    }
+
+    // 2. Cek juga dari state lokal transaksi saat ini (khusus user ini)
+    transactions.forEach(t => {
+      const candidates = [t.no_nota, t.id];
+      candidates.forEach(cand => {
+        if (cand) {
+          const match = String(cand).trim().match(/^TRX-(\d+)$/i);
+          if (match) {
+            const num = parseInt(match[1], 10);
+            existingNumbers.add(num);
+            if (num > maxNum) maxNum = num;
+          }
+        }
+      });
+    });
+
+    let nextNum = maxNum + 1;
+    while (existingNumbers.has(nextNum)) {
       nextNum++;
     }
     return `TRX-${nextNum}`;
+  };
+
+  // Fungsi generator ID unik database (UUID global agar tidak pernah bentrok dengan primary key antar toko)
+  const generateGlobalUniqueId = () => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    return `TRX_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
   };
 
   // Add new transaction and persist to Supabase
@@ -316,11 +369,15 @@ export default function App() {
 
       const phoneVariants = Array.from(new Set([rawPhone, normalized08, normalized62].filter(Boolean)));
 
-      // 1. Ambil user_id aktif via supabase.auth.getUser() terlebih dahulu
-      const { data: { user } } = await supabase.auth.getUser();
-      const userId = user ? user.id : (localStorage.getItem('profileId') || null);
+      // 1. Ambil user_id aktif via getSession() atau getUser()
+      const { data: { session } } = await supabase.auth.getSession();
+      let userId = session?.user?.id || null;
+      if (!userId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        userId = user?.id || localStorage.getItem('profileId') || null;
+      }
 
-      // 2. Cek tabel customers berdasarkan nomor telepon
+      // 2. Cek tabel customers berdasarkan nomor telepon atau nama
       let existingCust = null;
 
       for (const phone of phoneVariants) {
@@ -347,6 +404,17 @@ export default function App() {
         }
       }
 
+      // Cek berdasarkan nama pelanggan jika belum ketemu lewat nomor HP
+      const inputCustomerName = (newTrxData.pelanggan || '').trim();
+      if (!existingCust && inputCustomerName && inputCustomerName !== 'Pelanggan Baru') {
+        let qName = supabase.from('customers').select('*').eq('nama', inputCustomerName);
+        if (userId) qName = qName.eq('user_id', userId);
+        const { data: byName } = await qName.maybeSingle();
+        if (byName) {
+          existingCust = byName;
+        }
+      }
+
       // Cek juga di state customers lokal jika belum ketemu
       if (!existingCust && cleanPhoneDigits && customers.length > 0) {
         const foundInState = customers.find(c => {
@@ -361,12 +429,12 @@ export default function App() {
         if (foundInState) existingCust = foundInState;
       }
 
-      // 3. Jika no_telepon belum ada di tabel customers, simpan nama, no_telepon, alamat, dan user_id
-      if (!existingCust && rawPhone) {
+      // 3. Jika pelanggan belum ada di tabel customers, simpan pelanggan baru
+      if (!existingCust && (rawPhone || inputCustomerName)) {
         const newCustomerData = {
-          nama: newTrxData.pelanggan || 'Pelanggan Baru',
-          no_telepon: rawPhone,
-          alamat: newTrxData.alamat || 'Surabaya',
+          nama: inputCustomerName || 'Pelanggan Baru',
+          no_telepon: rawPhone || '-',
+          alamat: (newTrxData.alamat || '').trim() || 'Surabaya',
           ...(userId ? { user_id: userId } : {})
         };
 
@@ -378,10 +446,11 @@ export default function App() {
 
         // Fallback jika database menggunakan nama kolom `telepon`
         if (custInsertErr) {
+          console.warn('Info: Kolom no_telepon pada customers tidak cocok, mencoba kolom telepon:', custInsertErr.message);
           const fallbackData = {
-            nama: newTrxData.pelanggan || 'Pelanggan Baru',
-            telepon: rawPhone,
-            alamat: newTrxData.alamat || 'Surabaya',
+            nama: inputCustomerName || 'Pelanggan Baru',
+            telepon: rawPhone || '-',
+            alamat: (newTrxData.alamat || '').trim() || 'Surabaya',
             ...(userId ? { user_id: userId } : {})
           };
           const { data: fallbackCust, error: fbErr } = await supabase
@@ -391,18 +460,23 @@ export default function App() {
             .maybeSingle();
 
           // Jika gagal karena kolom user_id belum ada di tabel customers, insert tanpa user_id
-          if (fbErr && fbErr.code === '42703') {
+          if (fbErr) {
+            console.warn('Info: Insert customers dengan user_id gagal, mencoba tanpa user_id:', fbErr.message);
             const noUserCust = {
-              nama: newTrxData.pelanggan || 'Pelanggan Baru',
-              telepon: rawPhone,
-              alamat: newTrxData.alamat || 'Surabaya',
+              nama: inputCustomerName || 'Pelanggan Baru',
+              telepon: rawPhone || '-',
+              alamat: (newTrxData.alamat || '').trim() || 'Surabaya',
             };
-            const { data: noUserRes } = await supabase
+            const { data: noUserRes, error: noUserErr } = await supabase
               .from('customers')
               .insert([noUserCust])
               .select()
               .maybeSingle();
-            insertedCust = noUserRes;
+            if (noUserErr) {
+              console.warn('Catatan: Pelanggan baru tidak dapat disimpan ke tabel customers:', noUserErr.message);
+            } else {
+              insertedCust = noUserRes;
+            }
           } else {
             insertedCust = fallbackCust;
           }
@@ -418,31 +492,153 @@ export default function App() {
       if (userId) {
         refreshCustQuery = refreshCustQuery.eq('user_id', userId);
       }
-      const { data: refreshedCust } = await refreshCustQuery;
-      if (refreshedCust) setCustomers(refreshedCust);
+      const { data: refreshedCust, error: refCustErr } = await refreshCustQuery;
+      if (refCustErr) {
+        console.warn('Catatan: refresh customers:', refCustErr.message);
+      } else if (refreshedCust) {
+        setCustomers(refreshedCust);
+      }
 
-      const generatedId = generateSequentialId();
+      const nextNoNota = await generateNextNoNota(userId);
+      const globalId = generateGlobalUniqueId();
 
-      // Pastikan tanggalSelesai tidak bernilai NULL
+      // Pastikan tanggalMasuk dan tanggalSelesai terisi dan valid (format YYYY-MM-DD)
+      const tanggalMasuk = (newTrxData.tanggalMasuk && String(newTrxData.tanggalMasuk).trim() !== '')
+        ? newTrxData.tanggalMasuk
+        : new Date().toISOString().split('T')[0];
+
       const tanggalSelesai = (newTrxData.tanggalSelesai && String(newTrxData.tanggalSelesai).trim() !== '')
         ? newTrxData.tanggalSelesai
-        : (newTrxData.tanggalMasuk || new Date().toISOString().split('T')[0]);
+        : tanggalMasuk;
 
-      // 4. Setelah itu simpan transaksi ke tabel transactions
-      const newTrx = {
-        ...newTrxData,
-        id: generatedId,
-        nota: generatedId,
-        user_id: userId,
+      const beratQty = Number(newTrxData.beratQty) || 1;
+      const rawHargaSatuan = Number(newTrxData.hargaSatuan) || Number(newTrxData.hargaPerKg) || (Number(newTrxData.total) / beratQty) || 0;
+      const total = Number(newTrxData.total) || (rawHargaSatuan * beratQty);
+
+      // 4. Siapkan payload transaksi:
+      // - id: UUID unik global (agar tidak bentrok dengan transactions_pkey antar toko)
+      // - no_nota: Nomor urut nota per toko (TRX-1, TRX-2, dst.)
+      let trxPayload = {
+        id: globalId,
+        no_nota: nextNoNota,
+        pelanggan: inputCustomerName || 'Pelanggan Baru',
+        telepon: rawPhone || '08123456789',
+        alamat: (newTrxData.alamat || '').trim() || 'Surabaya',
+        layanan: newTrxData.layanan || 'Cuci Reguler',
+        kategori: newTrxData.kategori || 'kg',
+        beratQty: beratQty,
+        unit: newTrxData.unit || 'kg',
+        total: total,
+        statusBayar: newTrxData.statusBayar || 'Belum Bayar',
+        statusLaundry: newTrxData.statusLaundry || 'Baru Masuk',
+        tanggalMasuk: tanggalMasuk,
         tanggalSelesai: tanggalSelesai,
+        ...(userId ? { user_id: userId } : {})
       };
 
-      const { data: insertedTrx, error: trxError } = await supabase
+      // Lakukan insert dengan mekanisme fallback pintar jika skema memiliki perbedaan
+      let insertedTrx = null;
+      let lastTrxError = null;
+
+      let { data: resTrx, error: trxError } = await supabase
         .from('transactions')
-        .insert([newTrx])
+        .insert([trxPayload])
         .select()
-        .single();
-      if (trxError) throw trxError;
+        .maybeSingle();
+
+      if (trxError) {
+        console.warn('Percobaan awal insert transaksi menemui kendala:', trxError);
+        lastTrxError = trxError;
+
+        // Fallback A: Error 22P02 (invalid input syntax type bigint/uuid) karena kolom id disertakan string TRX-X
+        if (trxError.code === '22P02' && trxPayload.id) {
+          const retryA = { ...trxPayload };
+          delete retryA.id;
+          const { data: resA, error: errA } = await supabase
+            .from('transactions')
+            .insert([retryA])
+            .select()
+            .maybeSingle();
+          if (!errA) {
+            insertedTrx = resA;
+            trxError = null;
+          } else {
+            trxError = errA;
+            lastTrxError = errA;
+          }
+        }
+
+        // Fallback B: Error 23502 (violates not-null constraint pada kolom id tanpa default)
+        if (trxError && trxError.code === '23502' && !trxPayload.id) {
+          const retryB = { ...trxPayload, id: globalId };
+          const { data: resB, error: errB } = await supabase
+            .from('transactions')
+            .insert([retryB])
+            .select()
+            .maybeSingle();
+          if (!errB) {
+            insertedTrx = resB;
+            trxError = null;
+          } else {
+            trxError = errB;
+            lastTrxError = errB;
+          }
+        }
+
+        // Fallback C: Error 42703 (kolom tidak ada di tabel transactions)
+        if (trxError && trxError.code === '42703') {
+          const retryC = { ...trxPayload };
+          const colMatch = trxError.message?.match(/column "(.*?)"/i);
+          if (colMatch && colMatch[1]) {
+            delete retryC[colMatch[1]];
+          }
+          const { data: resC, error: errC } = await supabase
+            .from('transactions')
+            .insert([retryC])
+            .select()
+            .maybeSingle();
+          if (!errC) {
+            insertedTrx = resC;
+            trxError = null;
+          } else {
+            trxError = errC;
+            lastTrxError = errC;
+          }
+        }
+
+        // Fallback D: Error 23503 (foreign key constraint pada user_id)
+        if (trxError && trxError.code === '23503' && trxPayload.user_id) {
+          const retryD = { ...trxPayload };
+          delete retryD.user_id;
+          const { data: resD, error: errD } = await supabase
+            .from('transactions')
+            .insert([retryD])
+            .select()
+            .maybeSingle();
+          if (!errD) {
+            insertedTrx = resD;
+            trxError = null;
+          } else {
+            trxError = errD;
+            lastTrxError = errD;
+          }
+        }
+      } else {
+        insertedTrx = resTrx;
+      }
+
+      if (trxError) {
+        throw lastTrxError || trxError;
+      }
+
+      // Jika insert sukses tetapi RLS membatasi select() sehingga insertedTrx null
+      if (!insertedTrx) {
+        insertedTrx = {
+          ...trxPayload,
+          id: trxPayload.id || globalId,
+          no_nota: trxPayload.no_nota || nextNoNota,
+        };
+      }
 
       // Refresh transaksi terbaru (filter hanya milik user yang sedang login)
       let refreshTrxQuery = supabase
@@ -452,14 +648,23 @@ export default function App() {
       if (userId) {
         refreshTrxQuery = refreshTrxQuery.eq('user_id', userId);
       }
-      const { data: refreshedTx } = await refreshTrxQuery;
-      if (refreshedTx) setTransactions(refreshedTx);
+      const { data: refreshedTx, error: refTxErr } = await refreshTrxQuery;
+      if (refTxErr) {
+        console.warn('Catatan: refresh transactions:', refTxErr.message);
+        setTransactions(prev => [insertedTrx, ...prev.filter(t => t.id !== insertedTrx.id)]);
+      } else if (refreshedTx) {
+        setTransactions(refreshedTx);
+      }
 
-      showToast(`Pesanan nota ${insertedTrx.nota} (${insertedTrx.pelanggan}) berhasil ditambahkan!`);
+      showToast(`Pesanan nota ${insertedTrx.no_nota || insertedTrx.id} (${insertedTrx.pelanggan}) berhasil ditambahkan!`);
       setSelectedReceiptTrx(insertedTrx);
     } catch (err) {
-      console.error(err);
-      showToast('Gagal menambahkan transaksi.', 'error');
+      console.error('Detail error simpan transaksi:', err);
+      const rawMsg = err?.message || err?.error_description || err?.details || err?.hint;
+      const errorDetails = rawMsg
+        ? (typeof rawMsg === 'string' ? rawMsg : JSON.stringify(rawMsg))
+        : (typeof err === 'object' ? JSON.stringify(err) : String(err));
+      showToast(`Gagal menambahkan transaksi: ${errorDetails}`, 'error');
     }
   };
 
@@ -542,6 +747,7 @@ export default function App() {
 
               localStorage.setItem('profileId', authUserId);
 
+              const avatarUrl = profileData.avatar_url || profileData.avatar || profileData.logo_url || localStorage.getItem('silaundry_avatar_' + authUserId) || null;
               setAdminProfile({
                 namaToko: profileData.nama_toko || 'SI LAUNDRY',
                 namaAdmin: profileData.nama_admin || 'Admin',
@@ -549,6 +755,7 @@ export default function App() {
                 whatsapp: profileData.no_whatsapp || '',
                 alamatToko: profileData.alamat || '',
                 jamOperasional: profileData.jam_operasional || '',
+                avatar: avatarUrl,
               });
 
               // Fetch ulang services khusus user ini setelah login sukses
@@ -760,7 +967,7 @@ export default function App() {
         return (
           <ProfilAdmin
             adminProfile={adminProfile}
-            onUpdateProfile={(updated) => setAdminProfile(updated)}
+            onUpdateProfile={(updated) => setAdminProfile(prev => ({ ...prev, ...updated }))}
             onOpenPasswordModal={() => setIsPasswordModalOpen(true)}
             onShowToast={showToast}
           />

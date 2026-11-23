@@ -34,8 +34,8 @@ export default function Sidebar({
     }
   };
 
-  // Ambil huruf pertama dari nama toko (Cth: 'S')
-  const storeInitial = adminProfile?.namaToko ? adminProfile.namaToko.charAt(0).toUpperCase() : 'S';
+  // Ambil huruf pertama dari nama toko (fallback ke nama admin jika nama toko kosong)
+  const storeInitial = (adminProfile?.namaToko || adminProfile?.namaAdmin || 'S').trim().charAt(0).toUpperCase() || 'S';
 
   return (
     <>
@@ -100,10 +100,18 @@ export default function Sidebar({
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  {/* Avatar Abjad Berdasarkan Nama Toko */}
-                  <div className="w-9 h-9 rounded-xl bg-[#008A7B] text-white flex items-center justify-center font-black text-sm tracking-wider shadow-sm shrink-0">
-                    {storeInitial}
-                  </div>
+                  {/* Avatar Foto atau Abjad Berdasarkan Nama Toko */}
+                  {adminProfile?.avatar ? (
+                    <img
+                      src={adminProfile.avatar}
+                      alt={adminProfile?.namaAdmin || 'Admin'}
+                      className="w-9 h-9 rounded-xl object-cover ring-2 ring-[#00C4B4]/40 shadow-sm shrink-0"
+                    />
+                  ) : (
+                    <div className="w-9 h-9 rounded-xl bg-[#008A7B] text-white flex items-center justify-center font-black text-sm tracking-wider shadow-sm shrink-0">
+                      {storeInitial}
+                    </div>
+                  )}
                   <div className="text-left overflow-hidden">
                     <p className="text-xs font-bold text-white truncate max-w-[120px]">
                       {adminProfile.namaAdmin || 'Admin Laundry'}

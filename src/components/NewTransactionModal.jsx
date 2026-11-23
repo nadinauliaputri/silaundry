@@ -57,19 +57,38 @@ export default function NewTransactionModal({
     const nextSeq = Number(transactionCount || 0) + 1;
     const seqId = `TRX-${nextSeq}`;
 
+    let formattedPhone = '08123456789';
+    if (formData.nomorWhatsApp && formData.nomorWhatsApp.trim() !== '') {
+      const clean = formData.nomorWhatsApp.trim();
+      if (clean.startsWith('+62')) {
+        formattedPhone = clean;
+      } else if (clean.startsWith('62')) {
+        formattedPhone = `+${clean}`;
+      } else if (clean.startsWith('0')) {
+        formattedPhone = `+62 ${clean.slice(1)}`;
+      } else {
+        formattedPhone = `+62 ${clean}`;
+      }
+    }
+
+    const hargaSatuan = Number(formData.hargaPerKg) || 0;
+    const beratQty = Number(formData.beratQty) || 1;
+    const total = hargaSatuan * beratQty;
+    const tanggalMasuk = formData.tanggalMasuk || new Date().toISOString().split('T')[0];
+    const tanggalSelesai = formData.tanggalSelesai || tanggalMasuk;
+
     const newTrx = {
       id: seqId,
-      nota: seqId,
-      tanggalMasuk: formData.tanggalMasuk,
-      tanggalSelesai: formData.tanggalSelesai,
-      pelanggan: formData.namaPelanggan || 'Pelanggan Baru',
-      telepon: formData.nomorWhatsApp ? `+62 ${formData.nomorWhatsApp}` : '08123456789',
-      alamat: formData.alamatPelanggan || 'Surabaya',
-      layanan: formData.jenisLayanan,
+      tanggalMasuk: tanggalMasuk,
+      tanggalSelesai: tanggalSelesai,
+      pelanggan: (formData.namaPelanggan || '').trim() || 'Pelanggan Baru',
+      telepon: formattedPhone,
+      alamat: (formData.alamatPelanggan || '').trim() || 'Surabaya',
+      layanan: formData.jenisLayanan || (selectedSvc?.name || selectedSvc?.nama || 'Cuci Reguler'),
       kategori: selectedSvc?.unit || 'kg',
-      beratQty: Number(formData.beratQty),
+      beratQty: beratQty,
       unit: selectedSvc?.unit ? (selectedSvc.unit.toLowerCase().includes('item') ? 'pcs' : selectedSvc.unit.toLowerCase().includes('pasang') ? 'pasang' : 'kg') : 'kg',
-      total: Number(formData.hargaPerKg) * Number(formData.beratQty),
+      total: total,
       statusBayar: formData.isLunas ? 'Lunas' : 'Belum Bayar',
       statusLaundry: 'Baru Masuk',
     };

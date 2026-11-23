@@ -62,8 +62,9 @@ export default function Transaksi({
     }
 
     const matchesSearch =
-      (trx.nota && trx.nota.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (trx.no_nota && String(trx.no_nota).toLowerCase().includes(searchTerm.toLowerCase())) ||
       (trx.id && String(trx.id).toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (trx.nota && String(trx.nota).toLowerCase().includes(searchTerm.toLowerCase())) ||
       (trx.pelanggan && trx.pelanggan.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (trx.telepon && trx.telepon.includes(searchTerm)) ||
       (trx.layanan && trx.layanan.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -214,7 +215,7 @@ export default function Transaksi({
                   <tr key={trx.id} className="hover:bg-slate-50/80 dark:hover:bg-[#1D354A]/60 transition-colors">
                     <td className="py-4 px-5">
                       <div className="font-extrabold text-[#101E2C] dark:text-white text-sm">
-                        {trx.nota}
+                        {trx.no_nota || trx.nota || trx.id}
                       </div>
                       <div className="mt-1 space-y-0.5 text-[11px] leading-tight">
                         <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">

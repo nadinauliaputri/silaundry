@@ -35,8 +35,8 @@ export default function Header({
     }
   };
 
-  // Ambil huruf pertama dari nama toko untuk inisial avatar (Cth: 'S')
-  const storeInitial = adminProfile?.namaToko ? adminProfile.namaToko.charAt(0).toUpperCase() : 'S';
+  // Ambil huruf pertama dari nama toko untuk inisial avatar (fallback ke nama admin jika nama toko kosong)
+  const storeInitial = (adminProfile?.namaToko || adminProfile?.namaAdmin || 'S').trim().charAt(0).toUpperCase() || 'S';
 
   return (
     <header className="sticky top-0 z-30 bg-white/90 dark:bg-[#101E2C]/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 px-4 sm:px-8 py-3.5 flex items-center justify-between transition-colors duration-300">

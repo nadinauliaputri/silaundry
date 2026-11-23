@@ -130,7 +130,7 @@ export default function Pendapatan({
 
       grouped[dateKey].totalHarian += totalVal;
       grouped[dateKey].transaksiList.push({
-        idNota: trx.nota || trx.id || 'TRX',
+        idNota: trx.no_nota || trx.id || trx.nota || 'TRX',
         pelanggan: trx.pelanggan || 'Pelanggan',
         layanan: trx.layanan || 'Reguler',
         berat: `${beratVal} ${unitVal}`,
@@ -197,7 +197,7 @@ export default function Pendapatan({
             <tr>
               <th>Tanggal</th>
               <th>Status Buku</th>
-              <th>ID Nota</th>
+              <th>ID Transaksi</th>
               <th>Pelanggan</th>
               <th>Layanan</th>
               <th>Berat</th>
@@ -469,7 +469,7 @@ export default function Pendapatan({
                   <table className="w-full text-left text-xs whitespace-nowrap">
                     <thead className="bg-slate-50 dark:bg-[#112232] text-slate-500 dark:text-slate-300 uppercase font-bold text-[10px] tracking-wider">
                       <tr>
-                        <th className="py-2.5 px-4 rounded-l-xl border-l dark:border-slate-700/50">ID / Nota</th>
+                        <th className="py-2.5 px-4 rounded-l-xl border-l dark:border-slate-700/50">ID Transaksi</th>
                         <th className="py-2.5 px-4">Pelanggan</th>
                         <th className="py-2.5 px-4">Layanan</th>
                         <th className="py-2.5 px-4">Berat</th>

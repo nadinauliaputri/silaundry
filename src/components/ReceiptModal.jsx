@@ -178,7 +178,7 @@ export default function ReceiptModal({
         });
 
         const link = document.createElement('a');
-        const notaName = transaction.nota || transaction.id || 'Laundry';
+        const notaName = transaction.no_nota || transaction.id || transaction.nota || 'Laundry';
         link.download = `Struk-${notaName}.jpg`;
         link.href = dataUrl;
         link.click();
@@ -293,13 +293,13 @@ export default function ReceiptModal({
             {/* Divider Dot Line */}
             <div className="border-b border-dashed border-slate-200 my-2" />
 
-            {/* 2. Title & Nota Badge */}
+            {/* 2. Title & ID Transaksi Badge */}
             <div className="flex items-center justify-between">
               <h4 className="font-extrabold text-xs uppercase tracking-wider text-slate-800">
                 STRUK LAUNDRY
               </h4>
               <span className="px-3 py-1 rounded-full bg-[#E6F8F5] text-[#008A7B] text-xs font-bold border border-[#00C4B4]/20">
-                {transaction.nota || transaction.id || 'TRX-1'}
+                {transaction.no_nota || transaction.id || transaction.nota || 'TRX-1'}
               </span>
             </div>
 

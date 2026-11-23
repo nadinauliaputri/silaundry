@@ -297,7 +297,7 @@ export default function Pelanggan({
       if (matchedTransactions.length > 0) {
         return matchedTransactions.map((trx, idx) => ({
           id: `${cust.id}-${trx.id || idx}`,
-          nota: trx.nota || trx.id,
+          nota: trx.no_nota || trx.nota || trx.id,
           nama: cust.nama || trx.pelanggan,
           telepon: custPhone || trx.telepon,
           alamat: cust.alamat || trx.alamat,
@@ -312,10 +312,10 @@ export default function Pelanggan({
       }
 
       return (cust.riwayat || []).map((hist, idx) => {
-        const matchedTrx = transactions.find(t => t.nota === hist.nota && t.pelanggan?.toLowerCase() === cust.nama?.toLowerCase());
+        const matchedTrx = transactions.find(t => (t.no_nota === hist.nota || t.id === hist.nota || t.nota === hist.nota || t.id === hist.id) && t.pelanggan?.toLowerCase() === cust.nama?.toLowerCase());
         return {
           id: `${cust.id}-${idx}`,
-          nota: hist.nota,
+          nota: hist.no_nota || hist.id || hist.nota,
           nama: cust.nama,
           telepon: custPhone,
           alamat: cust.alamat,
@@ -327,7 +327,7 @@ export default function Pelanggan({
           statusBayar: matchedTrx ? matchedTrx.statusBayar : 'Lunas',
           rawTransaction: matchedTrx || {
             id: Date.now() + idx,
-            nota: hist.nota,
+            nota: hist.no_nota || hist.id || hist.nota,
             pelanggan: cust.nama,
             telepon: custPhone,
             alamat: cust.alamat,
@@ -589,7 +589,7 @@ export default function Pelanggan({
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
-              placeholder="Cari berdasarkan nama pelanggan, nomor nota, atau layanan..."
+              placeholder="Cari berdasarkan nama pelanggan, ID transaksi, atau layanan..."
               className="w-full pl-10 pr-3.5 py-2.5 text-xs bg-slate-50 dark:bg-[#112232] border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#008A7B]/20 focus:border-[#008A7B] dark:text-white dark:placeholder-slate-400 transition-all font-medium"
             />
           </div>
@@ -623,7 +623,7 @@ export default function Pelanggan({
                 key={item.id}
                 className="bg-white dark:bg-[#172A3B] rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-xs hover:shadow-sm transition-all p-5 flex flex-col justify-between gap-4"
               >
-                {/* Bagian Atas: Profil Pelanggan & Nota Badge */}
+                {/* Bagian Atas: Profil Pelanggan & ID Transaksi Badge */}
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <div className={`w-11 h-11 rounded-2xl ${getAvatarBg(item.nama)} text-white flex items-center justify-center font-bold text-xs shadow-xs shrink-0`}>
