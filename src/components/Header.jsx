@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Menu,
   Calendar,
   Sun,
   Moon
@@ -46,17 +45,8 @@ export default function Header({
 
   return (
     <header className="sticky top-0 z-30 bg-white/90 dark:bg-[#101E2C]/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 px-3 sm:px-8 py-3 flex items-center justify-between gap-2 transition-colors duration-300">
-      {/* Sisi Kiri: Menu Mobile + Nama Halaman + Tanggal */}
-      <div className="flex items-center gap-1.5 sm:gap-4 min-w-0">
-        <button
-          type="button"
-          onClick={() => setIsMobileOpen && setIsMobileOpen(true)}
-          className="lg:hidden p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
-          aria-label="Buka navigasi menu"
-        >
-          <Menu className="w-5 h-5" />
-        </button>
-
+      {/* Sisi Kiri: Nama Halaman + Tanggal Ringkas */}
+      <div className="flex items-center gap-2 sm:gap-4 min-w-0">
         <div className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 rounded-full bg-[#E6F8F5] dark:bg-[#008A7B]/20 border border-[#008A7B]/25 dark:border-[#008A7B]/40 text-[#008A7B] dark:text-[#00C4B4] font-extrabold text-[11px] sm:text-sm tracking-wide shadow-xs shrink-0 select-none">
           <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-[#008A7B] dark:bg-[#00C4B4] animate-pulse shrink-0" />
           <span className="whitespace-nowrap">{getPageTitle(activePage)}</span>

@@ -1,13 +1,24 @@
-import React from 'react';
-import { LogOut, X, AlertTriangle } from 'lucide-react';
+import React, { useState } from 'react';
+import { LogOut, X, Loader2 } from 'lucide-react';
 
 export default function LogoutModal({ isOpen, onClose, onConfirm }) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   if (!isOpen) return null;
+
+  const handleConfirm = async () => {
+    setIsSubmitting(true);
+    try {
+      if (onConfirm) await onConfirm();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div 
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#101E2C]/70 backdrop-blur-sm animate-fadeIn"
-      onClick={onClose}
+      onClick={isSubmitting ? undefined : onClose}
     >
       <div 
         className="relative w-full max-w-sm bg-white rounded-2xl shadow-modal overflow-hidden p-6 text-center animate-scaleUp border border-slate-100"
@@ -16,7 +27,8 @@ export default function LogoutModal({ isOpen, onClose, onConfirm }) {
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+          disabled={isSubmitting}
+          className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer disabled:opacity-50"
         >
           <X className="w-4 h-4" />
         </button>
@@ -37,17 +49,28 @@ export default function LogoutModal({ isOpen, onClose, onConfirm }) {
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-all cursor-pointer"
+            disabled={isSubmitting}
+            className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
           >
             Batal
           </button>
           <button
             type="button"
-            onClick={onConfirm}
-            className="flex-1 py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+            onClick={handleConfirm}
+            disabled={isSubmitting}
+            className="flex-1 py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
           >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>Ya, Keluar Akun</span>
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Memproses...</span>
+              </>
+            ) : (
+              <>
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Ya, Keluar Akun</span>
+              </>
+            )}
           </button>
         </div>
       </div>

@@ -331,7 +331,7 @@ export default function Dashboard({
       </div>
 
       {/* Floating Help / Support Button */}
-      <div className="fixed bottom-6 right-6 z-30">
+      <div className="fixed bottom-20 lg:bottom-6 right-4 sm:right-6 z-30">
         <button
           onClick={() => alert('Butuh bantuan? Silakan hubungi tim support SI LAUNDRY.')}
           className="w-10 h-10 rounded-full bg-white text-slate-600 dark:bg-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-lg flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer"

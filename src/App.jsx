@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
+import BottomNav from './components/BottomNav';
 import ReceiptModal from './components/ReceiptModal';
 import PasswordModal from './components/PasswordModal';
 import NewTransactionModal from './components/NewTransactionModal';
@@ -969,6 +970,7 @@ export default function App() {
             adminProfile={adminProfile}
             onUpdateProfile={(updated) => setAdminProfile(prev => ({ ...prev, ...updated }))}
             onOpenPasswordModal={() => setIsPasswordModalOpen(true)}
+            onLogout={() => setIsLogoutModalOpen(true)}
             onShowToast={showToast}
           />
         );
@@ -1019,9 +1021,16 @@ export default function App() {
         />
 
         {/* Page Container */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pb-24 sm:pb-24 lg:pb-8 max-w-7xl w-full mx-auto">
           {renderContent()}
         </main>
+
+        {/* Bottom Navigation Bar for Mobile / Tablet (< lg) */}
+        <BottomNav
+          activePage={activePage}
+          setActivePage={setActivePage}
+          pendingCount={inProgressCount}
+        />
       </div>
 
       {/* Global Modals & Notifications */}

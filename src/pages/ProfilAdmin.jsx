@@ -14,7 +14,8 @@ import {
   Camera,
   Upload,
   Trash2,
-  Loader2
+  Loader2,
+  LogOut
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 
@@ -22,9 +23,11 @@ export default function ProfilAdmin({
   adminProfile,
   onUpdateProfile,
   onOpenPasswordModal,
+  onLogout,
   onShowToast
 }) {
   const fileInputRef = useRef(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Inisialisasi state: Jika email masih menggunakan domain lama atau kosong, langsung set ke namatoko@gmail.com
   const initialStoreName = adminProfile?.namaToko || 'SI LAUNDRY Express & Clean';
@@ -457,14 +460,49 @@ export default function ProfilAdmin({
               Disarankan untuk memperbarui kata sandi secara berkala guna melindungi data transaksi dan privasi pelanggan.
             </p>
 
-            <button
-              type="button"
-              onClick={onOpenPasswordModal}
-              className="w-full py-2.5 px-4 rounded-xl bg-[#101E2C] hover:bg-[#182C3F] dark:bg-slate-800 dark:hover:bg-slate-700 text-white text-xs font-bold transition-all shadow-xs hover:shadow flex items-center justify-center gap-2 group cursor-pointer"
-            >
-              <Lock className="w-3.5 h-3.5 text-[#00C4B4] group-hover:scale-110 transition-transform" />
-              <span>Ubah Kata Sandi</span>
-            </button>
+            <div className="space-y-2.5 pt-1">
+              <button
+                type="button"
+                onClick={onOpenPasswordModal}
+                className="w-full py-2.5 px-4 rounded-xl bg-[#101E2C] hover:bg-[#182C3F] dark:bg-slate-800 dark:hover:bg-slate-700 text-white text-xs font-bold transition-all shadow-xs hover:shadow flex items-center justify-center gap-2 group cursor-pointer"
+              >
+                <Lock className="w-3.5 h-3.5 text-[#00C4B4] group-hover:scale-110 transition-transform" />
+                <span>Ubah Kata Sandi</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  if (onLogout) {
+                    try {
+                      const res = onLogout();
+                      if (res instanceof Promise) {
+                        setIsLoggingOut(true);
+                        await res;
+                      }
+                    } catch (err) {
+                      console.error('Logout error:', err);
+                    } finally {
+                      setIsLoggingOut(false);
+                    }
+                  }
+                }}
+                disabled={isLoggingOut}
+                className="w-full py-2.5 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 border border-rose-200/80 dark:border-rose-800/80 text-rose-600 dark:text-rose-400 text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 group cursor-pointer disabled:opacity-50"
+              >
+                {isLoggingOut ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Sedang Keluar...</span>
+                  </>
+                ) : (
+                  <>
+                    <LogOut className="w-3.5 h-3.5 text-rose-500 group-hover:-translate-x-0.5 transition-transform" />
+                    <span>Keluar Akun</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
 
