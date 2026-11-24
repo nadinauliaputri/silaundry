@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  ArrowLeft,
   ArrowRight,
   Mail,
   Key,
@@ -17,9 +16,9 @@ export default function Login({
   onOpenRegister,
   adminProfile
 }) {
-  // Default email diset ke namatoko@gmail.com
+  // Dikosongkan agar input bersih dan siap diketik dari awal; contoh "namatoko@gmail.com" tampil sebagai placeholder semu
   const [formData, setFormData] = useState({
-    email: 'namatoko@gmail.com',
+    email: '',
     password: '',
     rememberMe: true,
   });
@@ -47,7 +46,7 @@ export default function Login({
     try {
       if (onLogin) {
         const result = await onLogin({
-          email: formData.email,
+          email: formData.email.trim(),
           password: formData.password,
           rememberMe: formData.rememberMe,
         });
@@ -87,7 +86,7 @@ export default function Login({
             onClick={onBackToLanding}
             className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-600 hover:text-[#008A7B] transition-colors cursor-pointer group"
           >
-            <span>&larr; Kembali ke beranda</span>
+            <span>← Kembali ke beranda</span>
           </button>
         </div>
       </header>
@@ -193,11 +192,13 @@ export default function Login({
                   <Mail className="w-4 h-4 text-slate-400 shrink-0" />
                   <input
                     type="email"
+                    name="email"
+                    autoComplete="email"
                     required
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     placeholder="namatoko@gmail.com"
-                    className="w-full text-xs sm:text-sm outline-none placeholder:text-slate-400 bg-transparent text-slate-800"
+                    className="w-full text-xs sm:text-sm outline-none placeholder:text-slate-400/80 placeholder:italic bg-transparent text-slate-800"
                   />
                 </div>
               </div>
@@ -211,6 +212,8 @@ export default function Login({
                   <Key className="w-4 h-4 text-slate-400 shrink-0" />
                   <input
                     type={showPassword ? 'text' : 'password'}
+                    name="password"
+                    autoComplete="current-password"
                     required
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
