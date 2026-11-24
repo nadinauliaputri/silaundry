@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTheme } from '../context/ThemeContext';
 import {
   ArrowLeft,
   ArrowRight,
@@ -6,12 +7,16 @@ import {
   Eye,
   EyeOff,
   MessageSquare,
-  CheckCircle2
+  CheckCircle2,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 import { supabase } from '../lib/supabaseClient';
 
 export default function RegisterToko({ onBackToLanding, onRegisterSuccess, onEnterDashboard, onOpenLogin }) {
+  const { isDarkMode, toggleDarkMode } = useTheme();
+
   const [formData, setFormData] = useState({
     namaToko: '',
     namaAdmin: '',
@@ -110,9 +115,9 @@ export default function RegisterToko({ onBackToLanding, onRegisterSuccess, onEnt
   };
 
   return (
-    <div className="min-h-screen bg-white text-[#101E2C] font-sans antialiased flex flex-col selection:bg-teal-primary selection:text-white">
+    <div className="min-h-screen bg-white dark:bg-[#0B131E] text-[#101E2C] dark:text-white font-sans antialiased flex flex-col selection:bg-teal-primary selection:text-white transition-colors duration-200">
       {/* 1. TOP HEADER */}
-      <header className="sticky top-0 z-30 bg-white border-b border-slate-100">
+      <header className="sticky top-0 z-30 bg-white/95 dark:bg-[#101E2C]/95 backdrop-blur-md border-b border-slate-100 dark:border-slate-800 transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
           {/* Brand Logo */}
           <div
@@ -120,23 +125,35 @@ export default function RegisterToko({ onBackToLanding, onRegisterSuccess, onEnt
             className="flex items-center gap-2.5 cursor-pointer group"
           >
             <img
-              src="/logo_silaundry.png"
+              src={isDarkMode ? '/logo_dark.png' : '/logo_silaundry.png'}
               alt="Logo SI Laundry"
               className="h-10 sm:h-12 w-auto object-contain transition-transform group-hover:scale-105"
             />
-            <span className="font-extrabold text-base sm:text-lg tracking-tight text-[#101E2C]">
+            <span className="font-extrabold text-base sm:text-lg tracking-tight text-[#101E2C] dark:text-white">
               SI LAUNDRY
             </span>
           </div>
 
-          {/* Back to Home Button */}
-          <button
-            onClick={onBackToLanding}
-            className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-600 hover:text-[#008A7B] transition-colors cursor-pointer group"
-          >
-            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-            <span>Kembali ke beranda</span>
-          </button>
+          {/* Right Actions: Theme Toggle + Back to Home Button */}
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <button
+              type="button"
+              onClick={toggleDarkMode}
+              className="p-2 sm:p-2.5 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-amber-400 transition-colors cursor-pointer"
+              title={isDarkMode ? 'Beralih ke Mode Terang' : 'Beralih ke Mode Gelap'}
+              aria-label={isDarkMode ? 'Beralih ke Mode Terang' : 'Beralih ke Mode Gelap'}
+            >
+              {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-700" />}
+            </button>
+
+            <button
+              onClick={onBackToLanding}
+              className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-[#008A7B] dark:hover:text-[#00C4B4] transition-colors cursor-pointer group"
+            >
+              <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+              <span>Kembali ke beranda</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -230,32 +247,32 @@ export default function RegisterToko({ onBackToLanding, onRegisterSuccess, onEnt
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Registration Form (Clean White Background) */}
-        <div className="lg:col-span-6 bg-white p-6 sm:p-12 lg:p-16 flex items-center justify-center">
+        {/* RIGHT COLUMN: Registration Form */}
+        <div className="lg:col-span-6 bg-white dark:bg-[#0B131E] p-6 sm:p-12 lg:p-16 flex items-center justify-center transition-colors">
           <div className="w-full max-w-md mx-auto">
             {/* Logo Center */}
             <div className="text-center">
               <img
-                src="/logo_silaundry.png"
+                src={isDarkMode ? '/logo_dark.png' : '/logo_silaundry.png'}
                 alt="Logo SI Laundry"
                 className="h-16 w-auto object-contain mx-auto"
               />
-              <h2 className="text-2xl sm:text-3xl font-black text-[#101E2C] tracking-tight mt-4">
+              <h2 className="text-2xl sm:text-3xl font-black text-[#101E2C] dark:text-white tracking-tight mt-4">
                 Daftarkan toko laundry
               </h2>
-              <p className="text-slate-500 text-xs sm:text-sm mt-2">
+              <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mt-2">
                 Buat akun admin untuk mulai mencatat dan memantau cucian pelanggan.
               </p>
             </div>
 
             {/* Success Notification */}
             {isSuccess ? (
-              <div className="mt-8 p-6 rounded-2xl bg-emerald-50 border border-emerald-200 text-center animate-scaleUp">
-                <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-3">
+              <div className="mt-8 p-6 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-center animate-scaleUp">
+                <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto mb-3">
                   <CheckCircle2 className="w-7 h-7" />
                 </div>
-                <h4 className="font-bold text-base text-emerald-900">Pendaftaran Berhasil!</h4>
-                <p className="text-xs text-emerald-700 mt-1">
+                <h4 className="font-bold text-base text-emerald-900 dark:text-emerald-300">Pendaftaran Berhasil!</h4>
+                <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-1">
                   Akun toko <span className="font-semibold">{formData.namaToko || 'Laundry Anda'}</span> siap digunakan. Mengalihkan ke dashboard...
                 </p>
               </div>
@@ -265,7 +282,7 @@ export default function RegisterToko({ onBackToLanding, onRegisterSuccess, onEnt
                 {/* Row 1: Nama Toko & Nama Admin */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
-                    <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                    <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
                       Nama toko <span className="text-rose-500">*</span>
                     </label>
                     <input
@@ -274,12 +291,12 @@ export default function RegisterToko({ onBackToLanding, onRegisterSuccess, onEnt
                       placeholder="Laundry Bersih"
                       value={formData.namaToko}
                       onChange={(e) => setFormData({ ...formData, namaToko: e.target.value })}
-                      className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#008A7B]/20 focus:border-[#008A7B] transition-all placeholder:text-slate-400"
+                      className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white dark:bg-[#162534] border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#008A7B]/20 focus:border-[#008A7B] transition-all placeholder:text-slate-400 text-slate-800 dark:text-white"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                    <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
                       Nama admin <span className="text-rose-500">*</span>
                     </label>
                     <input
@@ -288,18 +305,18 @@ export default function RegisterToko({ onBackToLanding, onRegisterSuccess, onEnt
                       placeholder="Nama pengelola"
                       value={formData.namaAdmin}
                       onChange={(e) => setFormData({ ...formData, namaAdmin: e.target.value })}
-                      className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#008A7B]/20 focus:border-[#008A7B] transition-all placeholder:text-slate-400"
+                      className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white dark:bg-[#162534] border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#008A7B]/20 focus:border-[#008A7B] transition-all placeholder:text-slate-400 text-slate-800 dark:text-white"
                     />
                   </div>
                 </div>
 
                 {/* Row 2: WhatsApp Number with +62 Box */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
                     Nomor WhatsApp <span className="text-rose-500">*</span>
                   </label>
-                  <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-[#008A7B]/20 focus-within:border-[#008A7B] transition-all bg-white">
-                    <div className="px-3.5 py-2.5 bg-[#E8F8F5] text-[#008A7B] font-bold text-xs sm:text-sm flex items-center gap-1.5 border-r border-slate-200 shrink-0">
+                  <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-[#008A7B]/20 focus-within:border-[#008A7B] transition-all bg-white dark:bg-[#162534]">
+                    <div className="px-3.5 py-2.5 bg-[#E8F8F5] dark:bg-[#008A7B]/20 text-[#008A7B] dark:text-[#00C4B4] font-bold text-xs sm:text-sm flex items-center gap-1.5 border-r border-slate-200 dark:border-slate-700 shrink-0">
                       <MessageSquare className="w-4 h-4 fill-[#008A7B]/20" />
                       <span>+62</span>
                     </div>
@@ -309,7 +326,7 @@ export default function RegisterToko({ onBackToLanding, onRegisterSuccess, onEnt
                       placeholder="81234567890"
                       value={formData.whatsapp}
                       onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
-                      className="w-full px-3.5 py-2.5 text-xs sm:text-sm outline-none placeholder:text-slate-400 bg-transparent"
+                      className="w-full px-3.5 py-2.5 text-xs sm:text-sm outline-none placeholder:text-slate-400 bg-transparent text-slate-800 dark:text-white"
                     />
                   </div>
                   <p className="text-[11px] text-slate-400 mt-1">
@@ -319,10 +336,10 @@ export default function RegisterToko({ onBackToLanding, onRegisterSuccess, onEnt
 
                 {/* Row 3: Email Admin */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
                     Email admin <span className="text-rose-500">*</span>
                   </label>
-                  <div className="flex items-center border border-slate-200 rounded-xl px-3.5 py-2.5 gap-2.5 focus-within:ring-2 focus-within:ring-[#008A7B]/20 focus-within:border-[#008A7B] transition-all bg-white">
+                  <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 gap-2.5 focus-within:ring-2 focus-within:ring-[#008A7B]/20 focus-within:border-[#008A7B] transition-all bg-white dark:bg-[#162534]">
                     <Mail className="w-4 h-4 text-slate-400 shrink-0" />
                     <input
                       type="email"
@@ -330,7 +347,7 @@ export default function RegisterToko({ onBackToLanding, onRegisterSuccess, onEnt
                       placeholder="admin@laundry.com"
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full text-xs sm:text-sm outline-none placeholder:text-slate-400 bg-transparent"
+                      className="w-full text-xs sm:text-sm outline-none placeholder:text-slate-400 bg-transparent text-slate-800 dark:text-white"
                     />
                   </div>
                 </div>
@@ -338,12 +355,12 @@ export default function RegisterToko({ onBackToLanding, onRegisterSuccess, onEnt
                 {/* Row 4: Password with Toggle and Hint */}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs font-bold text-slate-800">
+                    <label className="text-xs font-bold text-slate-800 dark:text-slate-200">
                       Kata sandi <span className="text-rose-500">*</span>
                     </label>
                     <span className="text-[11px] text-slate-400">Minimal 6 karakter</span>
                   </div>
-                  <div className="flex items-center border border-slate-200 rounded-xl px-3.5 py-2.5 gap-2.5 focus-within:ring-2 focus-within:ring-[#008A7B]/20 focus-within:border-[#008A7B] transition-all bg-white">
+                  <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 gap-2.5 focus-within:ring-2 focus-within:ring-[#008A7B]/20 focus-within:border-[#008A7B] transition-all bg-white dark:bg-[#162534]">
                     <input
                       type={showPassword ? 'text' : 'password'}
                       required
@@ -351,12 +368,12 @@ export default function RegisterToko({ onBackToLanding, onRegisterSuccess, onEnt
                       placeholder="Buat sandi yang aman"
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      className="w-full text-xs sm:text-sm outline-none placeholder:text-slate-400 bg-transparent"
+                      className="w-full text-xs sm:text-sm outline-none placeholder:text-slate-400 bg-transparent text-slate-800 dark:text-white"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="text-slate-400 hover:text-slate-600 transition-colors focus:outline-none cursor-pointer"
+                      className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors focus:outline-none cursor-pointer"
                     >
                       {showPassword ? (
                         <EyeOff className="w-4 h-4" />
@@ -377,7 +394,7 @@ export default function RegisterToko({ onBackToLanding, onRegisterSuccess, onEnt
                     onChange={(e) => setFormData({ ...formData, agreeTerms: e.target.checked })}
                     className="mt-1 w-4 h-4 rounded text-[#008A7B] border-slate-300 focus:ring-[#008A7B] accent-[#008A7B] cursor-pointer"
                   />
-                  <label htmlFor="agreeTerms" className="text-xs text-slate-600 leading-snug cursor-pointer select-none">
+                  <label htmlFor="agreeTerms" className="text-xs text-slate-600 dark:text-slate-300 leading-snug cursor-pointer select-none">
                     Saya menyetujui Ketentuan Layanan dan Kebijakan Privasi SI LAUNDRY untuk pengelolaan data toko.
                   </label>
                 </div>
@@ -395,7 +412,7 @@ export default function RegisterToko({ onBackToLanding, onRegisterSuccess, onEnt
                 </div>
 
                 {/* Footer: Already have account */}
-                <p className="text-center text-xs text-slate-500 pt-2">
+                <p className="text-center text-xs text-slate-500 dark:text-slate-400 pt-2">
                   Sudah punya akun?{' '}
                   <button
                     type="button"

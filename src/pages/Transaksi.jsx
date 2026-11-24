@@ -1,20 +1,96 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   Printer
 } from 'lucide-react';
 import { formatRupiah, formatShortDate, getEstimatedCompletion } from '../utils/helpers';
+import { supabase } from '../lib/supabaseClient';
 
 export default function Transaksi({
-  transactions = [],
+  transactions: propTransactions = [],
   onUpdateStatus,
   onUpdatePayment,
   onSelectReceipt
 }) {
+  const [currentUserId, setCurrentUserId] = useState(() => {
+    return typeof window !== 'undefined' ? localStorage.getItem('profileId') : null;
+  });
+  const [transactions, setTransactions] = useState(propTransactions);
+
+  // Sinkronisasi state lokal jika props dari parent berubah & filter defensif berdasarkan user_id
+  useEffect(() => {
+    if (propTransactions) {
+      const uid = currentUserId || localStorage.getItem('profileId');
+      if (uid) {
+        setTransactions(propTransactions.filter(t => !t.user_id || t.user_id === uid));
+      } else {
+        setTransactions(propTransactions);
+      }
+    }
+  }, [propTransactions, currentUserId]);
+
+  // Fetch data transaksi Supabase khusus user yang sedang login & pasang Realtime subscription
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchUserTransactions = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const userId = session?.user?.id || localStorage.getItem('profileId');
+        if (!userId) return;
+        setCurrentUserId(userId);
+
+        const { data, error } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false });
+
+        if (!error && data && isMounted) {
+          setTransactions(data);
+        }
+      } catch (err) {
+        console.error('Error fetching transactions in Transaksi page:', err);
+      }
+    };
+
+    fetchUserTransactions();
+
+    const channel = supabase
+      .channel('transaksi-page-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'transactions' },
+        () => {
+          fetchUserTransactions();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('Semua Status');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
+
+  const handleStatusChange = (trxId, newStatus) => {
+    setTransactions(prev => prev.map(t => t.id === trxId ? { ...t, statusLaundry: newStatus } : t));
+    if (onUpdateStatus) {
+      onUpdateStatus(trxId, newStatus);
+    }
+  };
+
+  const handlePaymentChange = (trxId, newStatus) => {
+    setTransactions(prev => prev.map(t => t.id === trxId ? { ...t, statusBayar: newStatus } : t));
+    if (onUpdatePayment) {
+      onUpdatePayment(trxId, newStatus);
+    }
+  };
 
   // Daftar kartu ringkasan status di bagian atas
   const summaryCards = [
@@ -268,7 +344,7 @@ export default function Transaksi({
                     <td className="py-4 px-5">
                       <select
                         value={normalizeStatus(trx.statusLaundry)}
-                        onChange={(e) => onUpdateStatus && onUpdateStatus(trx.id, e.target.value)}
+                        onChange={(e) => handleStatusChange(trx.id, e.target.value)}
                         className={`text-xs font-bold px-3 py-1.5 rounded-xl border focus:outline-none cursor-pointer transition-all ${getStatusBadgeStyle(trx.statusLaundry)}`}
                       >
                         <option value="Baru Masuk" className="dark:bg-[#112232] dark:text-slate-200">Baru Masuk</option>
@@ -285,14 +361,7 @@ export default function Transaksi({
                       </div>
                       <select
                         value={trx.statusBayar || 'Lunas'}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (onUpdatePayment) {
-                            onUpdatePayment(trx.id, val);
-                          } else {
-                            trx.statusBayar = val;
-                          }
-                        }}
+                        onChange={(e) => handlePaymentChange(trx.id, e.target.value)}
                         className={`mt-1 text-[10px] font-extrabold px-2.5 py-1 rounded-lg border focus:outline-none cursor-pointer transition-all ${trx.statusBayar === 'Lunas'
                             ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
                             : 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800'

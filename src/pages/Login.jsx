@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTheme } from '../context/ThemeContext';
 import {
   ArrowRight,
   Mail,
@@ -7,7 +8,9 @@ import {
   EyeOff,
   Lock,
   CheckCircle,
-  HelpCircle
+  HelpCircle,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 export default function Login({
@@ -16,6 +19,8 @@ export default function Login({
   onOpenRegister,
   adminProfile
 }) {
+  const { isDarkMode, toggleDarkMode } = useTheme();
+
   // Dikosongkan agar input bersih dan siap diketik dari awal; contoh "namatoko@gmail.com" tampil sebagai placeholder semu
   const [formData, setFormData] = useState({
     email: '',
@@ -62,9 +67,9 @@ export default function Login({
   };
 
   return (
-    <div className="min-h-screen bg-white text-[#101E2C] font-sans antialiased flex flex-col selection:bg-teal-primary selection:text-white">
+    <div className="min-h-screen bg-white dark:bg-[#0B131E] text-[#101E2C] dark:text-white font-sans antialiased flex flex-col selection:bg-teal-primary selection:text-white transition-colors duration-200">
       {/* 1. TOP HEADER */}
-      <header className="sticky top-0 z-30 bg-white border-b border-slate-100">
+      <header className="sticky top-0 z-30 bg-white/95 dark:bg-[#101E2C]/95 backdrop-blur-md border-b border-slate-100 dark:border-slate-800 transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
           {/* Brand Logo */}
           <div
@@ -72,22 +77,34 @@ export default function Login({
             className="flex items-center gap-2.5 cursor-pointer group"
           >
             <img
-              src="/logo_silaundry.png"
+              src={isDarkMode ? '/logo_dark.png' : '/logo_silaundry.png'}
               alt="Logo SI Laundry"
               className="h-10 sm:h-12 w-auto object-contain transition-transform group-hover:scale-105"
             />
-            <span className="font-extrabold text-base sm:text-lg tracking-tight text-[#101E2C]">
+            <span className="font-extrabold text-base sm:text-lg tracking-tight text-[#101E2C] dark:text-white">
               SI LAUNDRY
             </span>
           </div>
 
-          {/* Back to Home Button */}
-          <button
-            onClick={onBackToLanding}
-            className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-600 hover:text-[#008A7B] transition-colors cursor-pointer group"
-          >
-            <span>← Kembali ke beranda</span>
-          </button>
+          {/* Right Actions: Theme Toggle + Back to Home */}
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <button
+              type="button"
+              onClick={toggleDarkMode}
+              className="p-2 sm:p-2.5 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-amber-400 transition-colors cursor-pointer"
+              title={isDarkMode ? 'Beralih ke Mode Terang' : 'Beralih ke Mode Gelap'}
+              aria-label={isDarkMode ? 'Beralih ke Mode Terang' : 'Beralih ke Mode Gelap'}
+            >
+              {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-700" />}
+            </button>
+
+            <button
+              onClick={onBackToLanding}
+              className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-[#008A7B] dark:hover:text-[#00C4B4] transition-colors cursor-pointer group"
+            >
+              <span>← Kembali ke beranda</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -147,35 +164,35 @@ export default function Login({
         </div>
 
         {/* RIGHT COLUMN: Form Section */}
-        <div className="lg:col-span-6 bg-white p-6 sm:p-12 lg:p-16 flex items-center justify-center">
+        <div className="lg:col-span-6 bg-white dark:bg-[#0B131E] p-6 sm:p-12 lg:p-16 flex items-center justify-center transition-colors">
           <div className="w-full max-w-md space-y-6">
-            {/* Center Logo diperbesar & tanpa teks di bawahnya */}
+            {/* Center Logo */}
             <div className="flex justify-center mb-4">
               <img
-                src="/logo_silaundry.png"
+                src={isDarkMode ? '/logo_dark.png' : '/logo_silaundry.png'}
                 alt="SI Laundry Logo"
                 className="h-24 sm:h-28 w-auto object-contain"
               />
             </div>
 
             {/* Lock Badge */}
-            <div className="w-10 h-10 rounded-2xl bg-[#E6F7F5] text-[#008A7B] flex items-center justify-center">
+            <div className="w-10 h-10 rounded-2xl bg-[#E6F7F5] dark:bg-[#008A7B]/20 text-[#008A7B] dark:text-[#00C4B4] flex items-center justify-center">
               <Lock className="w-5 h-5 fill-[#008A7B]/20" />
             </div>
 
             {/* Title */}
             <div>
-              <h2 className="text-2xl sm:text-3xl font-black text-[#101E2C] tracking-tight">
+              <h2 className="text-2xl sm:text-3xl font-black text-[#101E2C] dark:text-white tracking-tight">
                 Selamat datang kembali
               </h2>
-              <p className="text-xs sm:text-sm text-slate-500 mt-1.5 leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
                 Masuk ke akun admin untuk mulai mengelola operasional laundry Anda.
               </p>
             </div>
 
             {/* Error Message */}
             {errorMessage && (
-              <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-center gap-2">
+              <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs font-medium flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
                 <span>{errorMessage}</span>
               </div>
@@ -185,10 +202,10 @@ export default function Login({
             <form onSubmit={handleSubmit} className="space-y-4 pt-2">
               {/* Email Admin Input */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
                   Email admin <span className="text-rose-500">*</span>
                 </label>
-                <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-[#F8FAFC] border border-slate-100 focus-within:border-[#008A7B] focus-within:bg-white transition-all">
+                <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-[#F8FAFC] dark:bg-[#162534] border border-slate-100 dark:border-slate-700 focus-within:border-[#008A7B] focus-within:bg-white dark:focus-within:bg-[#162534] transition-all">
                   <Mail className="w-4 h-4 text-slate-400 shrink-0" />
                   <input
                     type="email"
@@ -198,17 +215,17 @@ export default function Login({
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     placeholder="namatoko@gmail.com"
-                    className="w-full text-xs sm:text-sm outline-none placeholder:text-slate-400/80 placeholder:italic bg-transparent text-slate-800"
+                    className="w-full text-xs sm:text-sm outline-none placeholder:text-slate-400/80 placeholder:italic bg-transparent text-slate-800 dark:text-white"
                   />
                 </div>
               </div>
 
               {/* Password Input */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
                   Kata sandi <span className="text-rose-500">*</span>
                 </label>
-                <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-[#F8FAFC] border border-slate-100 focus-within:border-[#008A7B] focus-within:bg-white transition-all">
+                <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-[#F8FAFC] dark:bg-[#162534] border border-slate-100 dark:border-slate-700 focus-within:border-[#008A7B] focus-within:bg-white dark:focus-within:bg-[#162534] transition-all">
                   <Key className="w-4 h-4 text-slate-400 shrink-0" />
                   <input
                     type={showPassword ? 'text' : 'password'}
@@ -218,12 +235,12 @@ export default function Login({
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     placeholder="••••••••"
-                    className="w-full text-xs sm:text-sm outline-none placeholder:text-slate-400 bg-transparent text-slate-800"
+                    className="w-full text-xs sm:text-sm outline-none placeholder:text-slate-400 bg-transparent text-slate-800 dark:text-white"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="text-slate-400 hover:text-slate-600 transition-colors focus:outline-none cursor-pointer"
+                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors focus:outline-none cursor-pointer"
                   >
                     {showPassword ? (
                       <EyeOff className="w-4 h-4" />
@@ -243,13 +260,13 @@ export default function Login({
                     onChange={(e) => setFormData({ ...formData, rememberMe: e.target.checked })}
                     className="w-4 h-4 rounded text-[#00665A] border-slate-300 focus:ring-[#00665A] accent-[#00665A] cursor-pointer"
                   />
-                  <span className="text-xs font-medium text-slate-600">Ingat saya</span>
+                  <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Ingat saya</span>
                 </label>
 
                 <button
                   type="button"
                   onClick={() => setShowForgotTip(!showForgotTip)}
-                  className="text-xs font-bold text-[#008A7B] hover:underline cursor-pointer"
+                  className="text-xs font-bold text-[#008A7B] dark:text-[#00C4B4] hover:underline cursor-pointer"
                 >
                   Lupa kata sandi?
                 </button>
@@ -278,12 +295,12 @@ export default function Login({
 
               {/* Register Link Capsule */}
               <div className="pt-4">
-                <div className="p-3.5 rounded-xl bg-[#F8FAFC] text-center text-xs text-slate-600">
+                <div className="p-3.5 rounded-xl bg-[#F8FAFC] dark:bg-[#162534] border border-slate-100 dark:border-slate-700 text-center text-xs text-slate-600 dark:text-slate-300">
                   Belum punya akun toko?{' '}
                   <button
                     type="button"
                     onClick={onOpenRegister}
-                    className="text-[#008A7B] font-bold hover:underline cursor-pointer ml-1"
+                    className="text-[#008A7B] dark:text-[#00C4B4] font-bold hover:underline cursor-pointer ml-1"
                   >
                     Daftar sekarang
                   </button>

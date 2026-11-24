@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTheme } from '../context/ThemeContext';
 import {
   ArrowRight,
   ArrowDown,
@@ -30,29 +31,8 @@ export default function LandingPage({ onEnterLogin, onOpenRegister }) {
   });
   const [registerSuccess, setRegisterSuccess] = useState(false);
 
-  // State mode gelap/terang (sinkron dengan localStorage & class `dark` di <html>)
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'dark') return true;
-    if (savedTheme === 'light') return false;
-    return document.documentElement.classList.contains('dark');
-  });
-
-  useEffect(() => {
-    const root = document.documentElement;
-    if (isDarkMode) {
-      root.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      root.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-    }
-  }, [isDarkMode]);
-
-  const handleToggleDarkMode = () => {
-    setIsDarkMode((prev) => !prev);
-  };
+  // State mode gelap/terang terpusat via ThemeContext
+  const { isDarkMode, toggleDarkMode: handleToggleDarkMode } = useTheme();
 
   const handleRegisterSubmit = (e) => {
     e.preventDefault();

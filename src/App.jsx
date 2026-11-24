@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTheme } from './context/ThemeContext';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
@@ -53,25 +54,46 @@ export default function App() {
     }
   }, [activePage]);
 
-  // Dark mode state dengan persistensi localStorage & update class 'dark' di root HTML
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('silaundry_theme');
-      if (saved) return saved === 'dark';
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-    return false;
-  });
+  // Centralized dark mode from ThemeContext
+  const { isDarkMode, toggleDarkMode } = useTheme();
 
-  useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('silaundry_theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('silaundry_theme', 'light');
+  // Helper untuk memuat data tenant/toko yang sedang aktif
+  const loadTenantData = async (userId, isMountedRef = true) => {
+    if (!userId) return;
+
+    try {
+      // 1. Ambil data layanan khusus milik user ini
+      const { data: svcData, error: svcErr } = await supabase
+        .from('services')
+        .select('*')
+        .eq('user_id', userId)
+        .order('id', { ascending: true });
+      if (!svcErr && svcData && isMountedRef) {
+        setServicesList(svcData);
+      }
+
+      // 2. Ambil data customers khusus milik user ini
+      const { data: custData, error: custErr } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('user_id', userId);
+      if (!custErr && custData && isMountedRef) {
+        setCustomers(custData);
+      }
+
+      // 3. Ambil data transaksi khusus milik user ini
+      const { data: trxData, error: trxErr } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+      if (!trxErr && trxData && isMountedRef) {
+        setTransactions(trxData);
+      }
+    } catch (err) {
+      console.error('Error fetching tenant data:', err);
     }
-  }, [isDarkMode]);
+  };
 
   // Cek session login aktif via supabase.auth.getSession() & fetch initial data
   useEffect(() => {
@@ -90,7 +112,7 @@ export default function App() {
         const currentUser = session?.user || null;
         const userId = currentUser ? currentUser.id : null;
 
-        if (currentUser && isMounted) {
+        if (currentUser && userId && isMounted) {
           localStorage.setItem('profileId', userId);
 
           // Ambil profil admin dari Supabase profiles
@@ -101,7 +123,7 @@ export default function App() {
             .maybeSingle();
 
           if (profileData && isMounted) {
-            const avatarUrl = profileData.avatar_url || profileData.avatar || profileData.logo_url || (userId ? localStorage.getItem('silaundry_avatar_' + userId) : null) || null;
+            const avatarUrl = profileData.avatar_url || profileData.avatar || profileData.logo_url || localStorage.getItem('silaundry_avatar_' + userId) || null;
             setAdminProfile({
               namaToko: profileData.nama_toko || 'SI LAUNDRY',
               namaAdmin: profileData.nama_admin || 'Admin',
@@ -112,7 +134,7 @@ export default function App() {
               avatar: avatarUrl,
             });
           } else if (isMounted) {
-            const avatarUrl = userId ? localStorage.getItem('silaundry_avatar_' + userId) : null;
+            const avatarUrl = localStorage.getItem('silaundry_avatar_' + userId) || null;
             setAdminProfile({
               namaToko: 'SI LAUNDRY',
               namaAdmin: currentUser.user_metadata?.namaAdmin || 'Admin',
@@ -132,7 +154,17 @@ export default function App() {
           } else {
             setActivePage('dashboard');
           }
+
+          // Muat data khusus toko ini (layanan, pelanggan, transaksi)
+          await loadTenantData(userId, isMounted);
         } else if (isMounted) {
+          // Jika tidak ada user login: bersihkan seluruh state agar tidak ada data lintas toko yang bocor
+          setAdminProfile(null);
+          setServicesList([]);
+          setCustomers([]);
+          setTransactions([]);
+          localStorage.removeItem('profileId');
+
           // Jika tidak ada session yang aktif, arahkan ke landing atau login/register
           const savedPage = localStorage.getItem('silaundry_active_page');
           if (savedPage === 'register' || savedPage === 'login') {
@@ -140,40 +172,6 @@ export default function App() {
           } else {
             setActivePage('landing');
           }
-        }
-
-        // Ambil data layanan khusus milik user yang sedang login
-        let svcQuery = supabase.from('services').select('*').order('id', { ascending: true });
-        if (userId) {
-          svcQuery = svcQuery.eq('user_id', userId);
-        }
-
-        const { data: svcData, error: svcErr } = await svcQuery;
-        if (!svcErr && svcData && isMounted) {
-          setServicesList(svcData);
-        }
-
-        // Ambil data customers milik user yang sedang login
-        let custQuery = supabase.from('customers').select('*');
-        if (userId) {
-          custQuery = custQuery.eq('user_id', userId);
-        }
-        const { data: custData, error: custErr } = await custQuery;
-        if (!custErr && custData && isMounted) {
-          setCustomers(custData);
-        }
-
-        // Ambil data transaksi milik user yang sedang login (filter by user_id)
-        let trxQuery = supabase
-          .from('transactions')
-          .select('*')
-          .order('created_at', { ascending: false });
-        if (userId) {
-          trxQuery = trxQuery.eq('user_id', userId);
-        }
-        const { data: trxData, error: trxErr } = await trxQuery;
-        if (!trxErr && trxData && isMounted) {
-          setTransactions(trxData);
         }
       } catch (err) {
         console.error('Error initializing app state:', err);
@@ -195,9 +193,11 @@ export default function App() {
         async () => {
           const { data: { session } } = await supabase.auth.getSession();
           const uid = session?.user?.id || localStorage.getItem('profileId');
-          let cq = supabase.from('customers').select('*');
-          if (uid) cq = cq.eq('user_id', uid);
-          const { data: updatedCust } = await cq;
+          if (!uid) return;
+          const { data: updatedCust } = await supabase
+            .from('customers')
+            .select('*')
+            .eq('user_id', uid);
           if (updatedCust && isMounted) {
             setCustomers(updatedCust);
           }
@@ -209,9 +209,12 @@ export default function App() {
         async () => {
           const { data: { session } } = await supabase.auth.getSession();
           const uid = session?.user?.id || localStorage.getItem('profileId');
-          let tq = supabase.from('transactions').select('*').order('created_at', { ascending: false });
-          if (uid) tq = tq.eq('user_id', uid);
-          const { data: updatedTrx } = await tq;
+          if (!uid) return;
+          const { data: updatedTrx } = await supabase
+            .from('transactions')
+            .select('*')
+            .eq('user_id', uid)
+            .order('created_at', { ascending: false });
           if (updatedTrx && isMounted) {
             setTransactions(updatedTrx);
           }
@@ -248,15 +251,19 @@ export default function App() {
       .subscribe();
 
     // Listener perubahan status autentikasi Supabase
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted) return;
       if (event === 'SIGNED_OUT') {
         setAdminProfile(null);
+        setServicesList([]);
+        setCustomers([]);
+        setTransactions([]);
         localStorage.removeItem('profileId');
         localStorage.setItem('silaundry_active_page', 'landing');
         setActivePage('landing');
       } else if (event === 'SIGNED_IN' && session?.user) {
         localStorage.setItem('profileId', session.user.id);
+        await loadTenantData(session.user.id, isMounted);
       }
     });
 
@@ -266,10 +273,6 @@ export default function App() {
       supabase.removeChannel(realtimeChannel);
     };
   }, []);
-
-  const toggleDarkMode = () => {
-    setIsDarkMode(prev => !prev);
-  };
 
   // Toast notification
   const [toast, setToast] = useState(null);
@@ -288,6 +291,9 @@ export default function App() {
     localStorage.removeItem('profileId');
     localStorage.setItem('silaundry_active_page', 'landing');
     setAdminProfile(null);
+    setServicesList([]);
+    setCustomers([]);
+    setTransactions([]);
     setIsLogoutModalOpen(false);
     setIsMobileOpen(false);
     setActivePage('landing');
@@ -298,12 +304,13 @@ export default function App() {
   const generateNextNoNota = async (currentUserId) => {
     let maxNum = 0;
     const existingNumbers = new Set();
+    const activeUserId = currentUserId || localStorage.getItem('profileId');
 
     // 1. Ambil data transaksi milik akun toko ini saja dari database
     try {
       let query = supabase.from('transactions').select('no_nota, id');
-      if (currentUserId) {
-        query = query.eq('user_id', currentUserId);
+      if (activeUserId) {
+        query = query.eq('user_id', activeUserId);
       }
       const { data: userTrx, error } = await query;
 
@@ -327,19 +334,21 @@ export default function App() {
     }
 
     // 2. Cek juga dari state lokal transaksi saat ini (khusus user ini)
-    transactions.forEach(t => {
-      const candidates = [t.no_nota, t.id];
-      candidates.forEach(cand => {
-        if (cand) {
-          const match = String(cand).trim().match(/^TRX-(\d+)$/i);
-          if (match) {
-            const num = parseInt(match[1], 10);
-            existingNumbers.add(num);
-            if (num > maxNum) maxNum = num;
+    transactions
+      .filter(t => !activeUserId || !t.user_id || t.user_id === activeUserId)
+      .forEach(t => {
+        const candidates = [t.no_nota, t.id];
+        candidates.forEach(cand => {
+          if (cand) {
+            const match = String(cand).trim().match(/^TRX-(\d+)$/i);
+            if (match) {
+              const num = parseInt(match[1], 10);
+              existingNumbers.add(num);
+              if (num > maxNum) maxNum = num;
+            }
           }
-        }
+        });
       });
-    });
 
     let nextNum = maxNum + 1;
     while (existingNumbers.has(nextNum)) {
@@ -759,16 +768,8 @@ export default function App() {
                 avatar: avatarUrl,
               });
 
-              // Fetch ulang services khusus user ini setelah login sukses
-              const { data: userServices } = await supabase
-                .from('services')
-                .select('*')
-                .eq('user_id', authUserId)
-                .order('id', { ascending: true });
-
-              if (userServices) {
-                setServicesList(userServices);
-              }
+              // Muat ulang data tenant (layanan, pelanggan, transaksi) khusus akun yang login
+              await loadTenantData(authUserId);
 
               setActivePage('dashboard');
               showToast(`Selamat datang kembali, ${profileData.nama_admin || 'Admin'}! 👋`);
@@ -792,14 +793,10 @@ export default function App() {
         <RegisterToko
           onBackToLanding={() => setActivePage('landing')}
           onEnterDashboard={async () => {
-            // Ambil data services terbaru setelah register
+            // Muat data tenant untuk akun baru
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
-              const { data: userServices } = await supabase
-                .from('services')
-                .select('*')
-                .eq('user_id', user.id);
-              if (userServices) setServicesList(userServices);
+              await loadTenantData(user.id);
             }
             setActivePage('dashboard');
           }}
