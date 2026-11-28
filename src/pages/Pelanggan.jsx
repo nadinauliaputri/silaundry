@@ -43,8 +43,12 @@ export default function Pelanggan({
   }, [propCustomers]);
 
   useEffect(() => {
-    if (propTransactions && propTransactions.length > 0) {
-      setTransactions(propTransactions);
+    if (propTransactions) {
+      const activeUserId = localStorage.getItem('profileId');
+      const filtered = activeUserId
+        ? propTransactions.filter(t => !t.user_id || t.user_id === activeUserId)
+        : propTransactions;
+      setTransactions(filtered);
     }
   }, [propTransactions]);
 
@@ -59,23 +63,29 @@ export default function Pelanggan({
 
         if (!userId) return;
 
-        // 1. Fetch customers dengan filter user_id
-        let custQ = supabase.from('customers').select('*');
-        if (userId) custQ = custQ.eq('user_id', userId);
-        const { data: custData, error: custErr } = await custQ;
+        // 1. Fetch customers dari database
+        const { data: custData, error: custErr } = await supabase
+          .from('customers')
+          .select('*')
+          .order('id', { ascending: false });
+
         if (!custErr && custData && isMounted) {
           setCustomers(custData);
         }
 
-        // 2. Fetch transactions dengan filter user_id
+        // 2. Fetch transactions dengan filter user_id khusus akun yang login
         let trxQ = supabase
           .from('transactions')
           .select('*')
           .order('created_at', { ascending: false });
+
         if (userId) trxQ = trxQ.eq('user_id', userId);
         const { data: trxData, error: trxErr } = await trxQ;
+
         if (!trxErr && trxData && isMounted) {
-          setTransactions(trxData);
+          // Pastikan hanya transaksi milik akun yang sedang login
+          const filteredTrx = trxData.filter(t => !userId || !t.user_id || t.user_id === userId);
+          setTransactions(filteredTrx);
         }
       } catch (err) {
         console.error('Error fetching Pelanggan data:', err);
@@ -125,11 +135,14 @@ export default function Pelanggan({
 
   // Kumpulkan list pelanggan unik untuk rekap Export Excel
   const customerSummaryList = useMemo(() => {
+    const activeUserId = localStorage.getItem('profileId');
+    const validTrx = transactions.filter(t => !activeUserId || !t.user_id || t.user_id === activeUserId);
+
     const list = [...customers];
     const seenPhones = new Set(list.map(c => cleanPhone(c.no_telepon || c.telepon)).filter(Boolean));
     const seenNames = new Set(list.map(c => (c.nama || '').trim().toLowerCase()).filter(Boolean));
 
-    transactions.forEach(t => {
+    validTrx.forEach(t => {
       const tName = (t.pelanggan || '').trim();
       const tPhone = (t.telepon || '').trim();
       const tPhoneClean = cleanPhone(tPhone);
@@ -155,7 +168,7 @@ export default function Pelanggan({
       const custPhone = cust.no_telepon || cust.telepon || '';
       const custName = (cust.nama || '').trim().toLowerCase();
 
-      const matchedTrx = transactions.filter(t => {
+      const matchedTrx = validTrx.filter(t => {
         const tName = (t.pelanggan || '').trim().toLowerCase();
         const matchName = custName && tName && custName === tName;
         const matchPhone = isPhoneMatch(custPhone, t.telepon);
@@ -175,7 +188,7 @@ export default function Pelanggan({
     });
   }, [customers, transactions]);
 
-  // Export Excel Khusus Data Identitas & Rekap Pelanggan
+  // Export Excel Khusus Data Riwayat Transaksi Pelanggan Sesuai Filter Periode & Akun Aktif
   const handleExportExcel = () => {
     const periodeKeterangan = jenisPeriode === 'Semua Periode'
       ? 'Semua Periode'
@@ -187,11 +200,13 @@ export default function Pelanggan({
       ? `Rentang: ${rangeStartMonth} s.d. ${rangeEndMonth}`
       : `Tahun ${tahunTransaksi}`;
 
+    const totalPendapatanExport = filteredItems.reduce((acc, curr) => acc + (Number(curr.total) || 0), 0);
+
     let htmlContent = `
       <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
       <head>
         <meta charset="utf-8">
-        <title>Data Pelanggan SI LAUNDRY</title>
+        <title>Data Transaksi Pelanggan SI LAUNDRY</title>
         <style>
           table { border-collapse: collapse; width: 100%; font-family: sans-serif; font-size: 11pt; }
           th { background-color: #008A7B; color: #ffffff; font-weight: bold; padding: 10px; border: 1px solid #cccccc; text-align: center; }
@@ -201,32 +216,41 @@ export default function Pelanggan({
         </style>
       </head>
       <body>
-        <h2>Data Rekapitulasi Pelanggan SI LAUNDRY</h2>
-        <p>Periode Filter: ${periodeKeterangan}</p>
-        <p>Total Pelanggan Terdaftar: ${customerSummaryList.length} Orang</p>
+        <h2>Data Riwayat Transaksi Pelanggan SI LAUNDRY</h2>
+        <p><b>Periode:</b> ${periodeKeterangan}</p>
+        <p><b>Total Transaksi:</b> ${filteredItems.length} Transaksi</p>
+        <p><b>Total Nilai Transaksi:</b> Rp ${totalPendapatanExport.toLocaleString('id-ID')}</p>
         <table>
           <thead>
             <tr>
               <th style="width: 40px;">No</th>
+              <th>No Nota / ID</th>
+              <th>Tanggal Masuk</th>
               <th>Nama Pelanggan</th>
               <th>Nomor WhatsApp</th>
-              <th>Alamat Lengkap</th>
-              <th>Total Transaksi</th>
-              <th>Total Belanja</th>
+              <th>Alamat</th>
+              <th>Jenis Layanan</th>
+              <th>Jumlah Cucian</th>
+              <th>Status Bayar</th>
+              <th>Total Biaya</th>
             </tr>
           </thead>
           <tbody>
     `;
 
-    customerSummaryList.forEach((cust, idx) => {
+    filteredItems.forEach((item, idx) => {
       htmlContent += `
         <tr>
           <td class="text-center">${idx + 1}</td>
-          <td><b>${cust.nama}</b></td>
-          <td class="text-center">${cust.telepon}</td>
-          <td>${cust.alamat}</td>
-          <td class="text-center">${cust.totalTransaksi} kali</td>
-          <td class="text-right"><b>Rp ${cust.totalBelanja.toLocaleString('id-ID')}</b></td>
+          <td class="text-center"><b>${item.nota || '-'}</b></td>
+          <td class="text-center">${item.tanggalMasuk || '-'}</td>
+          <td><b>${item.nama || '-'}</b></td>
+          <td class="text-center">${item.telepon || '-'}</td>
+          <td>${item.alamat || '-'}</td>
+          <td>${item.layanan || '-'}</td>
+          <td class="text-center">${item.beratQty || 0} ${item.unit || 'kg'}</td>
+          <td class="text-center">${item.statusBayar || '-'}</td>
+          <td class="text-right"><b>Rp ${(Number(item.total) || 0).toLocaleString('id-ID')}</b></td>
         </tr>
       `;
     });
@@ -242,105 +266,40 @@ export default function Pelanggan({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Data_Pelanggan_SI_LAUNDRY.xls`;
+    a.download = `Data_Transaksi_Pelanggan_SI_LAUNDRY.xls`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
     if (onShowToast) {
-      onShowToast('Data Pelanggan berhasil diexport ke Excel!');
+      onShowToast('Data Transaksi Pelanggan berhasil diexport ke Excel!');
     }
   };
 
   // Ubah data customer & riwayatnya menjadi list item per transaksi pelanggan
   const allCustomerTransactions = useMemo(() => {
-    // Gabungkan data customer dan derive customer dari transaksi jika belum ada di tabel customers
-    const list = [...customers];
-    const seenPhones = new Set(list.map(c => cleanPhone(c.no_telepon || c.telepon)).filter(Boolean));
-    const seenNames = new Set(list.map(c => (c.nama || '').trim().toLowerCase()).filter(Boolean));
+    // 1. Ambil ID user aktif untuk memastikan hanya transaksi milik akun yang login
+    const activeUserId = localStorage.getItem('profileId');
+    const validTransactions = transactions.filter(t => !activeUserId || !t.user_id || t.user_id === activeUserId);
 
-    transactions.forEach(t => {
-      const tName = (t.pelanggan || '').trim();
-      const tPhone = (t.telepon || '').trim();
-      const tPhoneClean = cleanPhone(tPhone);
-
-      const alreadyExists =
-        (tPhoneClean && seenPhones.has(tPhoneClean)) ||
-        (tName && seenNames.has(tName.toLowerCase()));
-
-      if (!alreadyExists && tName) {
-        list.push({
-          id: `derived-${t.id || tName}`,
-          nama: tName,
-          no_telepon: tPhone,
-          telepon: tPhone,
-          alamat: t.alamat || 'Surabaya',
-          isDerived: true
-        });
-        if (tPhoneClean) seenPhones.add(tPhoneClean);
-        seenNames.add(tName.toLowerCase());
-      }
-    });
-
-    return list.flatMap(cust => {
-      const custPhone = cust.no_telepon || cust.telepon || '';
-      const custName = (cust.nama || '').trim().toLowerCase();
-
-      const matchedTransactions = transactions.filter(t => {
-        const tName = (t.pelanggan || '').trim().toLowerCase();
-        const matchName = custName && tName && custName === tName;
-        const matchPhone = isPhoneMatch(custPhone, t.telepon);
-        return matchName || matchPhone;
-      });
-
-      if (matchedTransactions.length > 0) {
-        return matchedTransactions.map((trx, idx) => ({
-          id: `${cust.id}-${trx.id || idx}`,
-          nota: trx.no_nota || trx.nota || trx.id,
-          nama: cust.nama || trx.pelanggan,
-          telepon: custPhone || trx.telepon,
-          alamat: cust.alamat || trx.alamat,
-          layanan: trx.layanan,
-          beratQty: trx.beratQty,
-          unit: trx.unit,
-          total: trx.total,
-          tanggalMasuk: trx.tanggalMasuk,
-          statusBayar: trx.statusBayar,
-          rawTransaction: trx
-        }));
-      }
-
-      return (cust.riwayat || []).map((hist, idx) => {
-        const matchedTrx = transactions.find(t => (t.no_nota === hist.nota || t.id === hist.nota || t.nota === hist.nota || t.id === hist.id) && t.pelanggan?.toLowerCase() === cust.nama?.toLowerCase());
-        return {
-          id: `${cust.id}-${idx}`,
-          nota: hist.no_nota || hist.id || hist.nota,
-          nama: cust.nama,
-          telepon: custPhone,
-          alamat: cust.alamat,
-          layanan: matchedTrx ? matchedTrx.layanan : (cust.kategoriFavorit || 'Cuci Komplit Regular'),
-          beratQty: matchedTrx ? matchedTrx.beratQty : 4.5,
-          unit: matchedTrx ? matchedTrx.unit : 'kg',
-          total: hist.total,
-          tanggalMasuk: hist.tanggal,
-          statusBayar: matchedTrx ? matchedTrx.statusBayar : 'Lunas',
-          rawTransaction: matchedTrx || {
-            id: Date.now() + idx,
-            nota: hist.no_nota || hist.id || hist.nota,
-            pelanggan: cust.nama,
-            telepon: custPhone,
-            alamat: cust.alamat,
-            layanan: cust.kategoriFavorit || 'Cuci Komplit Regular',
-            beratQty: 4.5,
-            unit: 'kg',
-            total: hist.total,
-            statusBayar: 'Lunas',
-            statusLaundry: hist.status,
-            tanggalMasuk: hist.tanggal
-          }
-        };
-      });
+    // 2. Petakan langsung transaksi milik akun ini menjadi item riwayat transaksi pelanggan
+    return validTransactions.map((trx, idx) => {
+      const custPhone = trx.telepon || '';
+      return {
+        id: trx.id || `trx-${idx}`,
+        nota: trx.no_nota || trx.nota || trx.id,
+        nama: trx.pelanggan || 'Pelanggan',
+        telepon: custPhone,
+        alamat: trx.alamat || 'Surabaya',
+        layanan: trx.layanan || 'Cuci Reguler',
+        beratQty: trx.beratQty || 1,
+        unit: trx.unit || 'kg',
+        total: trx.total || 0,
+        tanggalMasuk: trx.tanggalMasuk || '',
+        statusBayar: trx.statusBayar || 'Lunas',
+        rawTransaction: trx
+      };
     });
   }, [customers, transactions]);
 
