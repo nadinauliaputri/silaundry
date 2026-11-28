@@ -307,11 +307,11 @@ export default function ReceiptModal({
             <div className="p-4 rounded-2xl bg-[#E6F8F5]/60 border border-[#00C4B4]/20 space-y-2 text-xs text-slate-700 font-medium">
               <div className="flex">
                 <span className="w-20 text-slate-500">Nama</span>
-                <span className="font-bold text-[#101E2C]">: {transaction.pelanggan}</span>
+                <span className="font-bold text-[#101E2C]">: {transaction.pelanggan || transaction.nama_pelanggan || transaction.nama || 'Pelanggan'}</span>
               </div>
               <div className="flex">
                 <span className="w-20 text-slate-500">No. HP</span>
-                <span className="font-bold text-[#101E2C]">: {transaction.telepon}</span>
+                <span className="font-bold text-[#101E2C]">: {transaction.telepon || transaction.no_telepon || transaction.nomorWhatsApp || '-'}</span>
               </div>
               <div className="flex">
                 <span className="w-20 text-slate-500">Alamat</span>
@@ -323,32 +323,38 @@ export default function ReceiptModal({
             <div className="rounded-2xl border border-slate-200 overflow-hidden text-xs">
               <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center justify-between font-bold text-slate-700">
                 <span>JENIS LAYANAN</span>
-                <span className="text-[#008A7B]">{transaction.layanan}</span>
+                <span className="text-[#008A7B]">{transaction.layanan || transaction.jenisLayanan || 'Cuci Reguler'}</span>
               </div>
               <div className="p-4 space-y-2.5 text-slate-600">
                 <div className="flex justify-between">
                   <span className="text-slate-500">Jumlah</span>
-                  <span className="font-bold text-slate-800">{transaction.beratQty} {transaction.unit || 'kg'}</span>
+                  <span className="font-bold text-slate-800">
+                    {transaction.beratQty ?? transaction.berat_qty ?? transaction.jumlah ?? 1} {transaction.unit || 'kg'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Harga Satuan</span>
-                  <span className="font-bold text-slate-800">{formatRupiah(transaction.total / (transaction.beratQty || 1))}</span>
+                  <span className="font-bold text-slate-800">
+                    {formatRupiah(transaction.hargaSatuan || transaction.harga || ((transaction.total || 0) / (transaction.beratQty || transaction.jumlah || 1)))}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Tanggal Masuk</span>
-                  <span className="font-semibold text-slate-800">{formatTanggalMasuk(transaction.tanggalMasuk)}</span>
+                  <span className="font-semibold text-slate-800">
+                    {formatTanggalMasuk(transaction.tanggalMasuk || transaction.tanggal_masuk || transaction.tanggal)}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Estimasi Selesai</span>
                   <span className="font-semibold text-slate-800">
-                    {formatTanggalMasuk(transaction.tanggalSelesai || transaction.estimasiSelesai) || '-'}
+                    {formatTanggalMasuk(transaction.tanggalSelesai || transaction.tanggal_selesai || transaction.estimasiSelesai) || '-'}
                   </span>
                 </div>
                 <div className="flex justify-between items-center pt-2 border-t border-slate-100">
                   <span className="text-slate-500">Status Pembayaran</span>
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                     <CheckCircle className="w-3 h-3" />
-                    <span>{transaction.statusBayar}</span>
+                    <span>{transaction.statusBayar || transaction.status_bayar || transaction.status || 'Belum Bayar'}</span>
                   </span>
                 </div>
               </div>
@@ -359,11 +365,11 @@ export default function ReceiptModal({
               <div>
                 <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">TOTAL</p>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  {transaction.beratQty} {transaction.unit || 'kg'} &times; {formatRupiah(transaction.total / (transaction.beratQty || 1))}
+                  {transaction.beratQty ?? transaction.berat_qty ?? transaction.jumlah ?? 1} {transaction.unit || 'kg'} &times; {formatRupiah(transaction.hargaSatuan || transaction.harga || ((transaction.total || 0) / (transaction.beratQty || transaction.jumlah || 1)))}
                 </p>
               </div>
               <span className="text-xl font-black text-[#101E2C]">
-                {formatRupiah(transaction.total)}
+                {formatRupiah(transaction.total || 0)}
               </span>
             </div>
 

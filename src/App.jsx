@@ -72,11 +72,9 @@ export default function App() {
         setServicesList(svcData);
       }
 
-      // 2. Ambil data customers khusus milik user ini
-      const { data: custData, error: custErr } = await supabase
-        .from('customers')
-        .select('*')
-        .eq('user_id', userId);
+      // 2. Ambil data customers
+      let custQuery = supabase.from('customers').select('*');
+      const { data: custData, error: custErr } = await custQuery;
       if (!custErr && custData && isMountedRef) {
         setCustomers(custData);
       }
@@ -191,13 +189,9 @@ export default function App() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'customers' },
         async () => {
-          const { data: { session } } = await supabase.auth.getSession();
-          const uid = session?.user?.id || localStorage.getItem('profileId');
-          if (!uid) return;
           const { data: updatedCust } = await supabase
             .from('customers')
-            .select('*')
-            .eq('user_id', uid);
+            .select('*');
           if (updatedCust && isMounted) {
             setCustomers(updatedCust);
           }
@@ -387,126 +381,89 @@ export default function App() {
         userId = user?.id || localStorage.getItem('profileId') || null;
       }
 
-      // 2. Cek tabel customers berdasarkan nomor telepon atau nama
-      let existingCust = null;
-
-      for (const phone of phoneVariants) {
-        if (existingCust) break;
-
-        // Coba periksa di kolom no_telepon
-        let q1 = supabase.from('customers').select('*').eq('no_telepon', phone);
-        if (userId) q1 = q1.eq('user_id', userId);
-        const { data: byNoTelp } = await q1.maybeSingle();
-
-        if (byNoTelp) {
-          existingCust = byNoTelp;
-          break;
-        }
-
-        // Coba periksa di kolom telepon
-        let q2 = supabase.from('customers').select('*').eq('telepon', phone);
-        if (userId) q2 = q2.eq('user_id', userId);
-        const { data: byTelp } = await q2.maybeSingle();
-
-        if (byTelp) {
-          existingCust = byTelp;
-          break;
-        }
-      }
-
-      // Cek berdasarkan nama pelanggan jika belum ketemu lewat nomor HP
+      // 2. Cek dan simpan/perbarui tabel customers
+      // Kolom valid di tabel customers: id (int8 PK auto-increment), nama (text), no_telepon (text), alamat (text).
+      // Catatan: TIDAK ADA kolom user_id di tabel customers, dan id diisi otomatis oleh database.
+      const customerPhone = rawPhone || (phoneVariants.length > 0 ? phoneVariants[0] : '');
       const inputCustomerName = (newTrxData.pelanggan || '').trim();
-      if (!existingCust && inputCustomerName && inputCustomerName !== 'Pelanggan Baru') {
-        let qName = supabase.from('customers').select('*').eq('nama', inputCustomerName);
-        if (userId) qName = qName.eq('user_id', userId);
-        const { data: byName } = await qName.maybeSingle();
-        if (byName) {
-          existingCust = byName;
-        }
-      }
+      const inputAlamat = (newTrxData.alamat || '').trim() || 'Surabaya';
 
-      // Cek juga di state customers lokal jika belum ketemu
-      if (!existingCust && cleanPhoneDigits && customers.length > 0) {
-        const foundInState = customers.find(c => {
-          const cPhoneDigits = String(c.no_telepon || c.telepon || '').replace(/\D/g, '');
-          if (!cPhoneDigits) return false;
-          return (
-            cPhoneDigits === cleanPhoneDigits ||
-            (cPhoneDigits.length >= 8 && cleanPhoneDigits.endsWith(cPhoneDigits)) ||
-            (cleanPhoneDigits.length >= 8 && cPhoneDigits.endsWith(cleanPhoneDigits))
-          );
-        });
-        if (foundInState) existingCust = foundInState;
-      }
+      try {
+        let existingCust = null;
 
-      // 3. Jika pelanggan belum ada di tabel customers, simpan pelanggan baru
-      if (!existingCust && (rawPhone || inputCustomerName)) {
-        const newCustomerData = {
-          nama: inputCustomerName || 'Pelanggan Baru',
-          no_telepon: rawPhone || '-',
-          alamat: (newTrxData.alamat || '').trim() || 'Surabaya',
-          ...(userId ? { user_id: userId } : {})
-        };
-
-        let { data: insertedCust, error: custInsertErr } = await supabase
-          .from('customers')
-          .insert([newCustomerData])
-          .select()
-          .maybeSingle();
-
-        // Fallback jika database menggunakan nama kolom `telepon`
-        if (custInsertErr) {
-          console.warn('Info: Kolom no_telepon pada customers tidak cocok, mencoba kolom telepon:', custInsertErr.message);
-          const fallbackData = {
-            nama: inputCustomerName || 'Pelanggan Baru',
-            telepon: rawPhone || '-',
-            alamat: (newTrxData.alamat || '').trim() || 'Surabaya',
-            ...(userId ? { user_id: userId } : {})
-          };
-          const { data: fallbackCust, error: fbErr } = await supabase
+        // Cek berdasarkan nomor telepon terlebih dahulu
+        for (const phone of phoneVariants) {
+          if (!phone) continue;
+          const { data: byPhone } = await supabase
             .from('customers')
-            .insert([fallbackData])
-            .select()
+            .select('*')
+            .eq('no_telepon', phone)
             .maybeSingle();
 
-          // Jika gagal karena kolom user_id belum ada di tabel customers, insert tanpa user_id
-          if (fbErr) {
-            console.warn('Info: Insert customers dengan user_id gagal, mencoba tanpa user_id:', fbErr.message);
-            const noUserCust = {
-              nama: inputCustomerName || 'Pelanggan Baru',
-              telepon: rawPhone || '-',
-              alamat: (newTrxData.alamat || '').trim() || 'Surabaya',
-            };
-            const { data: noUserRes, error: noUserErr } = await supabase
-              .from('customers')
-              .insert([noUserCust])
-              .select()
-              .maybeSingle();
-            if (noUserErr) {
-              console.warn('Catatan: Pelanggan baru tidak dapat disimpan ke tabel customers:', noUserErr.message);
-            } else {
-              insertedCust = noUserRes;
-            }
-          } else {
-            insertedCust = fallbackCust;
+          if (byPhone) {
+            existingCust = byPhone;
+            break;
           }
         }
 
-        if (insertedCust) {
-          setCustomers(prev => [insertedCust, ...prev]);
+        // Cek berdasarkan nama jika belum ditemukan
+        if (!existingCust && inputCustomerName && inputCustomerName !== 'Pelanggan Baru') {
+          const { data: byName } = await supabase
+            .from('customers')
+            .select('*')
+            .eq('nama', inputCustomerName)
+            .maybeSingle();
+          if (byName) {
+            existingCust = byName;
+          }
         }
+
+        if (existingCust) {
+          // Update nama atau alamat jika ada perubahan
+          const updates = {};
+          if (inputCustomerName && inputCustomerName !== 'Pelanggan Baru' && (existingCust.nama || '').trim() !== inputCustomerName) {
+            updates.nama = inputCustomerName;
+          }
+          if (inputAlamat && (existingCust.alamat || '').trim() !== inputAlamat) {
+            updates.alamat = inputAlamat;
+          }
+          if (Object.keys(updates).length > 0) {
+            await supabase
+              .from('customers')
+              .update(updates)
+              .eq('id', existingCust.id);
+          }
+        } else if (customerPhone || inputCustomerName) {
+          // Insert pelanggan baru (hanya nama, no_telepon, alamat)
+          const newCustomerData = {
+            nama: inputCustomerName || 'Pelanggan Baru',
+            no_telepon: customerPhone || '-',
+            alamat: inputAlamat,
+          };
+
+          const { error: insertCustErr } = await supabase
+            .from('customers')
+            .insert([newCustomerData]);
+
+          if (insertCustErr) {
+            console.warn('Gagal insert ke tabel customers:', insertCustErr.message);
+          }
+        }
+      } catch (custErr) {
+        console.warn('Proses customers di handleCreateTransaction:', custErr);
       }
 
-      // Refresh data customers terbaru (filter hanya milik user ini)
-      let refreshCustQuery = supabase.from('customers').select('*');
-      if (userId) {
-        refreshCustQuery = refreshCustQuery.eq('user_id', userId);
-      }
-      const { data: refreshedCust, error: refCustErr } = await refreshCustQuery;
-      if (refCustErr) {
-        console.warn('Catatan: refresh customers:', refCustErr.message);
-      } else if (refreshedCust) {
-        setCustomers(refreshedCust);
+      // Refresh state customers
+      try {
+        const { data: refreshedCust, error: refCustErr } = await supabase
+          .from('customers')
+          .select('*')
+          .order('id', { ascending: false });
+        if (!refCustErr && refreshedCust) {
+          setCustomers(refreshedCust);
+        }
+      } catch (refErr) {
+        console.warn('Catatan: refresh customers:', refErr);
       }
 
       const nextNoNota = await generateNextNoNota(userId);
@@ -525,30 +482,25 @@ export default function App() {
       const rawHargaSatuan = Number(newTrxData.hargaSatuan) || Number(newTrxData.hargaPerKg) || (Number(newTrxData.total) / beratQty) || 0;
       const total = Number(newTrxData.total) || (rawHargaSatuan * beratQty);
 
-      // 4. Siapkan payload transaksi:
-      // - id: UUID unik global (agar tidak bentrok dengan transactions_pkey antar toko)
-      // - no_nota: Nomor urut nota per toko (TRX-1, TRX-2, dst.)
-      let trxPayload = {
+      // Siapkan payload transaksi 100% sesuai skema tabel transactions Supabase:
+      // Hanya kolom: id, no_nota, pelanggan, telepon, layanan, alamat, kategori, total, beratQty, unit, statusBayar, statusLaundry, tanggalMasuk, tanggalSelesai, user_id
+      const trxPayload = {
         id: globalId,
         no_nota: nextNoNota,
         pelanggan: inputCustomerName || 'Pelanggan Baru',
         telepon: rawPhone || '08123456789',
-        alamat: (newTrxData.alamat || '').trim() || 'Surabaya',
         layanan: newTrxData.layanan || 'Cuci Reguler',
-        kategori: newTrxData.kategori || 'kg',
+        alamat: (newTrxData.alamat || '').trim() || 'Surabaya',
+        kategori: newTrxData.kategori || 'Kilogram (kg)',
+        total: total,
         beratQty: beratQty,
         unit: newTrxData.unit || 'kg',
-        total: total,
-        statusBayar: newTrxData.statusBayar || 'Belum Bayar',
+        statusBayar: newTrxData.statusBayar || 'Lunas',
         statusLaundry: newTrxData.statusLaundry || 'Baru Masuk',
         tanggalMasuk: tanggalMasuk,
         tanggalSelesai: tanggalSelesai,
         ...(userId ? { user_id: userId } : {})
       };
-
-      // Lakukan insert dengan mekanisme fallback pintar jika skema memiliki perbedaan
-      let insertedTrx = null;
-      let lastTrxError = null;
 
       let { data: resTrx, error: trxError } = await supabase
         .from('transactions')
@@ -557,117 +509,86 @@ export default function App() {
         .maybeSingle();
 
       if (trxError) {
-        console.warn('Percobaan awal insert transaksi menemui kendala:', trxError);
-        lastTrxError = trxError;
-
-        // Fallback A: Error 22P02 (invalid input syntax type bigint/uuid) karena kolom id disertakan string TRX-X
+        console.warn('Percobaan awal insert transactions menemui kendala:', trxError.message);
+        // Fallback jika id auto-increment atau bigint (Error 22P02)
         if (trxError.code === '22P02' && trxPayload.id) {
-          const retryA = { ...trxPayload };
-          delete retryA.id;
-          const { data: resA, error: errA } = await supabase
+          const retryPayload = { ...trxPayload };
+          delete retryPayload.id;
+          const { data: resRetry, error: errRetry } = await supabase
             .from('transactions')
-            .insert([retryA])
+            .insert([retryPayload])
             .select()
             .maybeSingle();
-          if (!errA) {
-            insertedTrx = resA;
+          if (!errRetry) {
+            resTrx = resRetry;
             trxError = null;
           } else {
-            trxError = errA;
-            lastTrxError = errA;
+            trxError = errRetry;
           }
         }
-
-        // Fallback B: Error 23502 (violates not-null constraint pada kolom id tanpa default)
-        if (trxError && trxError.code === '23502' && !trxPayload.id) {
-          const retryB = { ...trxPayload, id: globalId };
-          const { data: resB, error: errB } = await supabase
-            .from('transactions')
-            .insert([retryB])
-            .select()
-            .maybeSingle();
-          if (!errB) {
-            insertedTrx = resB;
-            trxError = null;
-          } else {
-            trxError = errB;
-            lastTrxError = errB;
-          }
-        }
-
-        // Fallback C: Error 42703 (kolom tidak ada di tabel transactions)
-        if (trxError && trxError.code === '42703') {
-          const retryC = { ...trxPayload };
-          const colMatch = trxError.message?.match(/column "(.*?)"/i);
-          if (colMatch && colMatch[1]) {
-            delete retryC[colMatch[1]];
-          }
-          const { data: resC, error: errC } = await supabase
-            .from('transactions')
-            .insert([retryC])
-            .select()
-            .maybeSingle();
-          if (!errC) {
-            insertedTrx = resC;
-            trxError = null;
-          } else {
-            trxError = errC;
-            lastTrxError = errC;
-          }
-        }
-
-        // Fallback D: Error 23503 (foreign key constraint pada user_id)
-        if (trxError && trxError.code === '23503' && trxPayload.user_id) {
-          const retryD = { ...trxPayload };
-          delete retryD.user_id;
-          const { data: resD, error: errD } = await supabase
-            .from('transactions')
-            .insert([retryD])
-            .select()
-            .maybeSingle();
-          if (!errD) {
-            insertedTrx = resD;
-            trxError = null;
-          } else {
-            trxError = errD;
-            lastTrxError = errD;
-          }
-        }
-      } else {
-        insertedTrx = resTrx;
       }
 
       if (trxError) {
-        throw lastTrxError || trxError;
+        console.error('Error insert transaksi ke Supabase:', trxError);
+        throw trxError;
       }
 
-      // Jika insert sukses tetapi RLS membatasi select() sehingga insertedTrx null
-      if (!insertedTrx) {
-        insertedTrx = {
-          ...trxPayload,
-          id: trxPayload.id || globalId,
-          no_nota: trxPayload.no_nota || nextNoNota,
-        };
-      }
+      // Pastikan objek data transaksi lengkap untuk tampilan di UI dan ReceiptModal
+      const receiptTrx = {
+        ...trxPayload,
+        ...(resTrx || {}),
+        id: (resTrx && resTrx.id) || trxPayload.id,
+        no_nota: (resTrx && resTrx.no_nota) || trxPayload.no_nota,
+        pelanggan: (resTrx && resTrx.pelanggan) || trxPayload.pelanggan,
+        telepon: (resTrx && resTrx.telepon) || trxPayload.telepon,
+        layanan: (resTrx && resTrx.layanan) || trxPayload.layanan,
+        alamat: (resTrx && resTrx.alamat) || trxPayload.alamat,
+        kategori: (resTrx && resTrx.kategori) || trxPayload.kategori,
+        total: (resTrx && resTrx.total !== undefined) ? resTrx.total : trxPayload.total,
+        beratQty: (resTrx && resTrx.beratQty !== undefined) ? resTrx.beratQty : trxPayload.beratQty,
+        unit: (resTrx && resTrx.unit) || trxPayload.unit,
+        statusBayar: (resTrx && resTrx.statusBayar) || trxPayload.statusBayar,
+        statusLaundry: (resTrx && resTrx.statusLaundry) || trxPayload.statusLaundry,
+        tanggalMasuk: (resTrx && resTrx.tanggalMasuk) || trxPayload.tanggalMasuk,
+        tanggalSelesai: (resTrx && resTrx.tanggalSelesai) || trxPayload.tanggalSelesai,
+      };
 
-      // Refresh transaksi terbaru (filter hanya milik user yang sedang login)
-      let refreshTrxQuery = supabase
-        .from('transactions')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (userId) {
-        refreshTrxQuery = refreshTrxQuery.eq('user_id', userId);
-      }
-      const { data: refreshedTx, error: refTxErr } = await refreshTrxQuery;
-      if (refTxErr) {
-        console.warn('Catatan: refresh transactions:', refTxErr.message);
-        setTransactions(prev => [insertedTrx, ...prev.filter(t => t.id !== insertedTrx.id)]);
-      } else if (refreshedTx) {
-        setTransactions(refreshedTx);
-      }
+      // 1. Perbarui state transaksi langsung di React agar seketika muncul di halaman Transaksi
+      setTransactions(prev => {
+        const filtered = prev.filter(t => t.id !== receiptTrx.id && t.no_nota !== receiptTrx.no_nota);
+        return [receiptTrx, ...filtered];
+      });
 
-      showToast(`Pesanan nota ${insertedTrx.no_nota || insertedTrx.id} (${insertedTrx.pelanggan}) berhasil ditambahkan!`);
-      setSelectedReceiptTrx(insertedTrx);
+      // 2. Sinkronkan dengan data database Supabase secara asynchronous di latar belakang
+      (async () => {
+        try {
+          let refreshTrxQuery = supabase
+            .from('transactions')
+            .select('*')
+            .order('created_at', { ascending: false });
+          if (userId) {
+            refreshTrxQuery = refreshTrxQuery.eq('user_id', userId);
+          }
+          const { data: refreshedTx } = await refreshTrxQuery;
+          if (refreshedTx && refreshedTx.length > 0) {
+            setTransactions(prev => {
+              const map = new Map();
+              refreshedTx.forEach(t => map.set(t.id || t.no_nota, t));
+              if (!map.has(receiptTrx.id) && !map.has(receiptTrx.no_nota)) {
+                map.set(receiptTrx.id, receiptTrx);
+              }
+              return Array.from(map.values());
+            });
+          }
+        } catch (syncErr) {
+          console.warn('Sync refresh transactions:', syncErr);
+        }
+      })();
+
+      // 3. Tampilkan toast, tutup NewTransactionModal, dan langsung buka ReceiptModal
+      showToast(`Pesanan nota ${receiptTrx.no_nota || receiptTrx.id} (${receiptTrx.pelanggan}) berhasil disimpan!`);
+      setIsNewTrxModalOpen(false);
+      setSelectedReceiptTrx(receiptTrx);
     } catch (err) {
       console.error('Detail error simpan transaksi:', err);
       const rawMsg = err?.message || err?.error_description || err?.details || err?.hint;
@@ -675,6 +596,8 @@ export default function App() {
         ? (typeof rawMsg === 'string' ? rawMsg : JSON.stringify(rawMsg))
         : (typeof err === 'object' ? JSON.stringify(err) : String(err));
       showToast(`Gagal menambahkan transaksi: ${errorDetails}`, 'error');
+      alert(`Gagal menyimpan transaksi ke database:\n${errorDetails}`);
+      throw err;
     }
   };
 

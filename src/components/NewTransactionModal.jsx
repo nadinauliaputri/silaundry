@@ -6,6 +6,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { formatRupiah } from '../utils/helpers';
+import { supabase } from '../lib/supabaseClient';
 
 export default function NewTransactionModal({
   isOpen,
@@ -31,6 +32,8 @@ export default function NewTransactionModal({
 
   const [formData, setFormData] = useState(getInitialFormData);
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // Fungsi untuk mereset seluruh isi state form menjadi default/kosong
   const resetForm = () => {
     setFormData(getInitialFormData());
@@ -50,8 +53,10 @@ export default function NewTransactionModal({
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     const selectedSvc = servicesList.find(s => (s.name || s.nama) === formData.jenisLayanan);
 
     const nextSeq = Number(transactionCount || 0) + 1;
@@ -76,28 +81,85 @@ export default function NewTransactionModal({
     const total = hargaSatuan * beratQty;
     const tanggalMasuk = formData.tanggalMasuk || new Date().toISOString().split('T')[0];
     const tanggalSelesai = formData.tanggalSelesai || tanggalMasuk;
+    const namaPelanggan = (formData.namaPelanggan || '').trim() || 'Pelanggan Baru';
+    const alamatPelanggan = (formData.alamatPelanggan || '').trim() || 'Surabaya';
 
     const newTrx = {
       id: seqId,
       tanggalMasuk: tanggalMasuk,
       tanggalSelesai: tanggalSelesai,
-      pelanggan: (formData.namaPelanggan || '').trim() || 'Pelanggan Baru',
+      pelanggan: namaPelanggan,
       telepon: formattedPhone,
-      alamat: (formData.alamatPelanggan || '').trim() || 'Surabaya',
       layanan: formData.jenisLayanan || (selectedSvc?.name || selectedSvc?.nama || 'Cuci Reguler'),
-      kategori: selectedSvc?.unit || 'kg',
+      alamat: alamatPelanggan,
+      kategori: selectedSvc?.unit || 'Kilogram (kg)',
+      total: total,
       beratQty: beratQty,
       unit: selectedSvc?.unit ? (selectedSvc.unit.toLowerCase().includes('item') ? 'pcs' : selectedSvc.unit.toLowerCase().includes('pasang') ? 'pasang' : 'kg') : 'kg',
-      total: total,
       statusBayar: formData.isLunas ? 'Lunas' : 'Belum Bayar',
       statusLaundry: 'Baru Masuk',
     };
 
-    if (onSave) {
-      onSave(newTrx);
+    setIsSubmitting(true);
+    try {
+      // 1. Simpan atau perbarui data pelanggan ke tabel 'customers' di Supabase
+      // Kolom: nama (text), no_telepon (text), alamat (text). ID auto-increment int8.
+      try {
+        const { data: existingCustomer, error: checkError } = await supabase
+          .from('customers')
+          .select('*')
+          .eq('no_telepon', formattedPhone)
+          .maybeSingle();
+
+        if (checkError) {
+          console.error('Error cek pelanggan di tabel customers:', checkError);
+        }
+
+        if (existingCustomer) {
+          const { error: updateError } = await supabase
+            .from('customers')
+            .update({
+              nama: namaPelanggan,
+              alamat: alamatPelanggan,
+            })
+            .eq('no_telepon', formattedPhone);
+
+          if (updateError) {
+            console.error('Gagal memperbarui data pelanggan di tabel customers:', updateError);
+            alert(`Gagal memperbarui data pelanggan: ${updateError.message}`);
+          }
+        } else {
+          const { error: insertError } = await supabase
+            .from('customers')
+            .insert([{
+              nama: namaPelanggan,
+              no_telepon: formattedPhone,
+              alamat: alamatPelanggan,
+            }]);
+
+          if (insertError) {
+            console.error('Gagal menyimpan pelanggan baru ke tabel customers:', insertError);
+            alert(`Gagal menyimpan data pelanggan: ${insertError.message}`);
+          }
+        }
+      } catch (custErr) {
+        console.error('Error proses data pelanggan di NewTransactionModal:', custErr);
+        alert(`Error data pelanggan: ${custErr.message || custErr}`);
+      }
+
+      // 2. Teruskan data transaksi lengkap ke handler onSave di App.jsx
+      if (onSave) {
+        await onSave(newTrx);
+      }
+
+      // 3. Reset form dan tutup modal setelah transaksi berhasil diproses
+      resetForm();
+      if (onClose) onClose();
+    } catch (e) {
+      console.error('Submit transaksi gagal:', e);
+    } finally {
+      setIsSubmitting(false);
     }
-    resetForm();
-    if (onClose) onClose();
   };
 
   const totalBiaya = Number(formData.hargaPerKg || 0) * Number(formData.beratQty || 0);
@@ -310,9 +372,10 @@ export default function NewTransactionModal({
             </button>
             <button
               type="submit"
-              className="px-6 py-2.5 rounded-xl bg-[#008A7B] hover:bg-[#007366] text-white text-xs font-bold shadow-md transition-all flex items-center gap-2 cursor-pointer"
+              disabled={isSubmitting}
+              className="px-6 py-2.5 rounded-xl bg-[#008A7B] hover:bg-[#007366] text-white text-xs font-bold shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-60"
             >
-              <span>Simpan & buat struk</span>
+              <span>{isSubmitting ? 'Menyimpan...' : 'Simpan & buat struk'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

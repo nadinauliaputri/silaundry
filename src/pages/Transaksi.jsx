@@ -319,33 +319,33 @@ export default function Transaksi({
                           {getInitials(trx.pelanggan)}
                         </div>
                         <div>
-                          <div className="font-bold text-slate-900 dark:text-white">{trx.pelanggan}</div>
+                          <div className="font-bold text-slate-900 dark:text-white">{trx.pelanggan || trx.nama_pelanggan || 'Pelanggan'}</div>
                           <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                            {trx.telepon} {trx.alamat ? `• ${trx.alamat}` : ''}
+                            {trx.telepon || trx.no_telepon || '-'} {trx.alamat ? `• ${trx.alamat}` : ''}
                           </div>
                         </div>
                       </div>
                     </td>
 
                     <td className="py-4 px-5">
-                      <div className="font-bold text-slate-800 dark:text-slate-200">{trx.layanan}</div>
+                      <div className="font-bold text-slate-800 dark:text-slate-200">{trx.layanan || trx.jenis_layanan || 'Cuci Reguler'}</div>
                       <div className="text-[11px] text-slate-400 dark:text-slate-400 mt-0.5">{trx.kategori || 'Reguler'}</div>
                     </td>
 
                     <td className="py-4 px-5">
                       <div className="font-bold text-slate-900 dark:text-white">
-                        {trx.beratQty || 1} {trx.unit || 'kg'}
+                        {trx.beratQty ?? trx.berat_qty ?? trx.jumlah ?? 1} {trx.unit || 'kg'}
                       </div>
                       <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                        ({formatRupiah(trx.hargaSatuan || (trx.total / (trx.beratQty || 1)))} / {trx.unit || 'kg'})
+                        ({formatRupiah(trx.hargaSatuan || trx.harga || (trx.total / (trx.beratQty || trx.jumlah || 1)))} / {trx.unit || 'kg'})
                       </div>
                     </td>
 
                     <td className="py-4 px-5">
                       <select
-                        value={normalizeStatus(trx.statusLaundry)}
+                        value={normalizeStatus(trx.statusLaundry || trx.status_laundry)}
                         onChange={(e) => handleStatusChange(trx.id, e.target.value)}
-                        className={`text-xs font-bold px-3 py-1.5 rounded-xl border focus:outline-none cursor-pointer transition-all ${getStatusBadgeStyle(trx.statusLaundry)}`}
+                        className={`text-xs font-bold px-3 py-1.5 rounded-xl border focus:outline-none cursor-pointer transition-all ${getStatusBadgeStyle(trx.statusLaundry || trx.status_laundry)}`}
                       >
                         <option value="Baru Masuk" className="dark:bg-[#112232] dark:text-slate-200">Baru Masuk</option>
                         <option value="Proses Cuci" className="dark:bg-[#112232] dark:text-slate-200">Proses Cuci</option>
@@ -357,12 +357,12 @@ export default function Transaksi({
 
                     <td className="py-4 px-5">
                       <div className="font-black text-[#101E2C] dark:text-white text-sm">
-                        {formatRupiah(trx.total)}
+                        {formatRupiah(trx.total || 0)}
                       </div>
                       <select
-                        value={trx.statusBayar || 'Lunas'}
+                        value={trx.statusBayar || trx.status_bayar || trx.status || 'Lunas'}
                         onChange={(e) => handlePaymentChange(trx.id, e.target.value)}
-                        className={`mt-1 text-[10px] font-extrabold px-2.5 py-1 rounded-lg border focus:outline-none cursor-pointer transition-all ${trx.statusBayar === 'Lunas'
+                        className={`mt-1 text-[10px] font-extrabold px-2.5 py-1 rounded-lg border focus:outline-none cursor-pointer transition-all ${(trx.statusBayar || trx.status_bayar || trx.status) === 'Lunas'
                             ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
                             : 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800'
                           }`}
